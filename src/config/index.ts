@@ -55,5 +55,19 @@ export const config = {
     baseUrl: process.env.FHIR_BASE_URL || 'http://localhost:3000/fhir',
   },
 
+  activeDirectory: {
+    enabled: process.env.AD_ENABLED === 'true',
+    serverUrl: process.env.AD_SERVER_URL || '',
+    baseDN: process.env.AD_BASE_DN || '',
+    bindDN: process.env.AD_BIND_DN || '',
+    bindPassword: process.env.AD_BIND_PASSWORD || '',
+    userSearchBase: process.env.AD_USER_SEARCH_BASE || '',
+    groupSearchBase: process.env.AD_GROUP_SEARCH_BASE || '',
+    tlsEnabled: process.env.AD_TLS_ENABLED !== 'false',
+    tlsCertPath: process.env.AD_TLS_CERT_PATH,
+    syncInterval: parseInt(process.env.AD_SYNC_INTERVAL || '3600000'), // 1 hour
+    allowLocal: process.env.AD_ALLOW_LOCAL_FALLBACK !== 'false',
+  },
+
   environment: process.env.NODE_ENV || 'development',
 };

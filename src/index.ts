@@ -140,6 +140,17 @@ async function startup() {
     logger.info('Initializing UNIX notification service...');
     const notificationService = initNotificationService();
 
+    // Initialize Active Directory if enabled
+    if (config.activeDirectory.enabled && config.activeDirectory.serverUrl) {
+      logger.info('Active Directory integration enabled');
+      logger.info(`AD Server: ${config.activeDirectory.serverUrl}`);
+      logger.info(`AD Base DN: ${config.activeDirectory.baseDN}`);
+    }
+
+    // Log DNS/Domain configuration
+    logger.info(`Domain: ${process.env.DOMAIN || 'not configured'}`);
+    logger.info(`Allowed Origins: ${process.env.ALLOWED_ORIGINS || 'localhost:3000'}`);
+
     // Make services available to request handlers
     app.use((req, res, next) => {
       (req as any).notificationService = notificationService;
