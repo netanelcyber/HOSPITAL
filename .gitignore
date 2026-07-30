@@ -36,7 +36,10 @@ minio_data/
 # VM/ISO builds
 iso-mount/
 rootfs/
-*.iso
+
+# Keep release ISO files but ignore build intermediates
+!/build/dss-*.tar.gz
+!/build/dss-*.iso
 *.iso.sha256
 *.iso.md5
 
