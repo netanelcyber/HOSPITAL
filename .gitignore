@@ -37,11 +37,11 @@ minio_data/
 iso-mount/
 rootfs/
 
-# Keep release ISO files but ignore build intermediates
+# Keep release ISO files and checksums
 !/build/dss-*.tar.gz
 !/build/dss-*.iso
-*.iso.sha256
-*.iso.md5
+!/build/dss-*.sha256
+!/build/dss-*.md5
 
 # Temporary files
 *.tmp
