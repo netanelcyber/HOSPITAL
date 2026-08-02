@@ -87,11 +87,53 @@ research, ranked by promise. Confirming any would require a running instance
 
 ---
 
+## 3a. Deep dive — SSRF surface (residual item #4, now traced to ground)
+
+Following the "deepen the investigation" request, I fully traced the remote-URL
+fetch surface (the `crop` / `crop_url` features and their credential-theft
+relevance to the cloud-migration concern). **It is comprehensively defended —
+including against the sophisticated bypasses that usually survive a first fix.**
+
+**The validator** (`app/validators/camaleon_cms/user_url_validator.rb`) is a port
+of **GitLab's `UrlBlocker`** — the industry reference implementation. It resolves
+DNS and checks the *resolved* IP against loopback, private (RFC1918), link-local
+(`169.254.0.0/16` — **covers the cloud metadata endpoint `169.254.169.254`**),
+IPv6 site-local/unique-local, shared-address (CGNAT `100.64.0.0/10`), and
+broadcast ranges. Because it validates the **resolved** IP, integer/octal/decimal
+IP-encoding tricks (e.g. `http://2130706433/`) don't help — the encoded form
+still resolves to a blocked IP and is caught. Decimal-shorthand hostnames are
+additionally rejected statically (`invalid_decimal_ipv4_hostname?`), and
+CR/LF-smuggling is blocked in `multiline_blocked?`.
+
+**The fetcher** (`uploader_pipeline.rb:241 cama_download_remote_file`) closes the
+two gaps that a validator alone cannot:
+
+| Bypass class | Mitigation | Location |
+|---|---|---|
+| **DNS rebinding (TOCTOU)** — DNS returns a safe IP at validation, an internal IP at fetch | Socket **pinned** to `validator.resolved_ip`; the fetch cannot go to a re-resolved address | `uploader_pipeline.rb:252` |
+| **Redirect-to-internal** — remote returns 30x → `http://169.254.169.254/...` | `Net::HTTPRedirection` responses **rejected**, not followed | `uploader_pipeline.rb:259` |
+| Response-size memory exhaustion | Body capped at site `filesystem_max_size` | `uploader_pipeline.rb:266` |
+| Error-message reflection | `ERB::Util.html_escape` on exception text | `uploader_pipeline.rb:278` |
+
+The same-site relaxation (`allow_localhost: true`) is only reachable when
+`same_site_url?` confirms the host **equals the site's own host** — which maps to
+a local `public/` file read, not a network request, so it cannot be abused to
+reach an internal service. Path traversal on that branch is still blocked
+(`reject_path_traversal: true`, multi-round percent-decoded).
+
+**Verdict:** the SSRF surface — the residual lead most likely to yield a finding,
+and the one tied to cloud IAM-credential theft — is fully mitigated in 2.9.2. The
+DNS-rebinding avenue I specifically hunted is closed by IP pinning.
+
 ## 4. Honest conclusion & next steps
 
-**Finding: no confirmed 0-day in core 2.9.2 from this pass.** The maintainers
-have clearly gone through the post-2024 CVE wave and hardened the obvious sinks;
-the code even carries security-rationale comments at the fixed lines.
+**Finding: no confirmed 0-day in core 2.9.2, including after the deep-dive pass.**
+The maintainers have clearly gone through the post-2024 CVE wave and hardened the
+obvious sinks *and* the subtle ones; the code carries security-rationale comments
+at the fixed lines, and the SSRF surface is defended down to DNS rebinding and
+redirect bypasses (§3a). This is a mature, well-defended codebase — the honest
+assessment is that a new core vulnerability is unlikely to fall out of static
+review alone.
 
 To responsibly get to something "no CNA knows yet," the realistic paths from
 here are:
