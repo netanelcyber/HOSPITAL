@@ -19,6 +19,8 @@ _WATCH = {
     "post-smtp": "wp-content/plugins/post-smtp/readme.txt",
     "suretriggers": "wp-content/plugins/suretriggers/readme.txt",
     "gotmls": "wp-content/plugins/gotmls/readme.txt",
+    "advanced-responsive-video-embedder":
+        "wp-content/plugins/advanced-responsive-video-embedder/readme.txt",
 }
 
 

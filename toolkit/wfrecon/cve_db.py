@@ -16,7 +16,7 @@ Version comparisons use "vulnerable if installed < affected_below" semantics via
 
 class CVE(object):
     def __init__(self, cve, slug, title, severity, affected_below, auth,
-                 references=None):
+                 references=None, affected_exact=None):
         self.cve = cve
         self.slug = slug            # plugin slug the entry applies to
         self.title = title
@@ -24,6 +24,9 @@ class CVE(object):
         self.affected_below = affected_below  # vulnerable if version < this
         self.auth = auth            # required privilege
         self.references = references if references is not None else []
+        # For supply-chain/backdoor cases: vulnerable ONLY at these exact
+        # versions (e.g. a single malicious release). Overrides affected_below.
+        self.affected_exact = affected_exact
 
 
 # --- Wordfence plugin's own CVEs (defender-tool bugs) -----------------------
@@ -75,6 +78,15 @@ ECOSYSTEM_CVES = [
          "https://www.tenable.com/cve/CVE-2025-11705",
          "https://github.com/advisories/GHSA-r62f-cx5r-q9jm"],
     ),
+    CVE(
+        "CVE-2026-18072", "advanced-responsive-video-embedder",
+        "ARVE (Advanced Responsive Video Embedder) 10.8.7 supply-chain BACKDOOR "
+        "-> unauthenticated admin session via hardcoded-token request (CVSS 9.8)",
+        "critical", "10.8.8", "unauthenticated",
+        ["https://hackread.com/wordfence-critical-backdoor-arve-wordpress-plugin/",
+         "https://blog.toolslib.net/2026/07/29/cve-2026-18072-arve-backdoor/"],
+        affected_exact=["10.8.7"],
+    ),
 ]
 
 ALL_CVES = WORDFENCE_CVES + ECOSYSTEM_CVES
@@ -103,5 +115,8 @@ def match(slug, version):
             continue
         if version is None:
             yield entry, False  # unconfirmed (version unknown)
+        elif entry.affected_exact is not None:
+            if version in entry.affected_exact:
+                yield entry, True   # exact backdoored release present
         elif version_lt(version, entry.affected_below):
             yield entry, True   # confirmed vulnerable by version
