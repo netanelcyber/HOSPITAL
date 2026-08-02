@@ -17,6 +17,8 @@ _STABLE_TAG = re.compile(r"Stable tag:\s*([0-9][0-9A-Za-z.\-]*)", re.I)
 # Plugins to probe for ecosystem CVEs (slug -> readme path).
 _WATCH = {
     "post-smtp": "wp-content/plugins/post-smtp/readme.txt",
+    "suretriggers": "wp-content/plugins/suretriggers/readme.txt",
+    "gotmls": "wp-content/plugins/gotmls/readme.txt",
 }
 
 

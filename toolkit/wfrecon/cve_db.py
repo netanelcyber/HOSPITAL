@@ -57,6 +57,24 @@ ECOSYSTEM_CVES = [
          "https://www.darkreading.com/vulnerabilities-threats/"
          "critical-site-takeover-flaw-400k-wordpress-sites"],
     ),
+    CVE(
+        "CVE-2025-3102", "suretriggers",
+        "SureTriggers/OttoKit <= 1.0.78 Authorization bypass (empty secret_key) "
+        "-> unauthenticated admin account creation (exploited within hours of disclosure)",
+        "critical", "1.0.79", "unauthenticated",
+        ["https://cvefeed.io/vuln/detail/CVE-2025-3102",
+         "https://www.bitdefender.com/en-us/blog/hotforsecurity/"
+         "threat-actors-exploit-high-severity-bypass-vulnerability-in-wordpress-plugin"],
+    ),
+    CVE(
+        "CVE-2025-11705", "gotmls",
+        "Anti-Malware Security & Brute-Force Firewall (GOTMLS) <= 4.23.81 "
+        "Missing authorization -> Subscriber+ arbitrary file read (e.g. wp-config.php)",
+        "high", "4.23.83", "subscriber",
+        ["https://research.cleantalk.org/cve-2025-11705/",
+         "https://www.tenable.com/cve/CVE-2025-11705",
+         "https://github.com/advisories/GHSA-r62f-cx5r-q9jm"],
+    ),
 ]
 
 ALL_CVES = WORDFENCE_CVES + ECOSYSTEM_CVES
