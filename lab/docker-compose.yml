@@ -1,0 +1,64 @@
+# Local pentest lab: WordPress + Wordfence + MariaDB
+# FOR AUTHORIZED, SELF-HOSTED TESTING ONLY.
+# Everything binds to 127.0.0.1 so nothing is exposed off-host.
+services:
+  db:
+    image: mariadb:11
+    container_name: wf-lab-db
+    restart: unless-stopped
+    environment:
+      MARIADB_ROOT_PASSWORD: rootpw
+      MARIADB_DATABASE: wordpress
+      MARIADB_USER: wordpress
+      MARIADB_PASSWORD: wordpress
+    volumes:
+      - db_data:/var/lib/mysql
+    networks:
+      - wflab
+
+  wordpress:
+    image: wordpress:6.5-php8.2-apache
+    container_name: wf-lab-wp
+    restart: unless-stopped
+    depends_on:
+      - db
+    ports:
+      # host:container — bound to loopback only
+      - "127.0.0.1:8080:80"
+    environment:
+      WORDPRESS_DB_HOST: db:3306
+      WORDPRESS_DB_USER: wordpress
+      WORDPRESS_DB_PASSWORD: wordpress
+      WORDPRESS_DB_NAME: wordpress
+      # Intentionally weak/verbose config so the recon toolkit has things to find.
+      WORDPRESS_DEBUG: "1"
+    volumes:
+      - wp_data:/var/www/html
+    networks:
+      - wflab
+
+  # One-shot helper: installs WP-CLI, sets the site up, and installs Wordfence.
+  wpcli:
+    image: wordpress:cli-php8.2
+    container_name: wf-lab-cli
+    depends_on:
+      - wordpress
+    user: "33:33"
+    environment:
+      WORDPRESS_DB_HOST: db:3306
+      WORDPRESS_DB_USER: wordpress
+      WORDPRESS_DB_PASSWORD: wordpress
+      WORDPRESS_DB_NAME: wordpress
+    volumes:
+      - wp_data:/var/www/html
+    networks:
+      - wflab
+    entrypoint: ["/bin/sh", "-c", "sleep infinity"]
+
+volumes:
+  db_data:
+  wp_data:
+
+networks:
+  wflab:
+    driver: bridge
