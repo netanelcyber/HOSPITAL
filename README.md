@@ -229,13 +229,56 @@ and test lets the model recognize them rather than generalize.
 
 ---
 
+## PenuX interoperability
+
+`data/penux_compat.py` reuses PenuX's conventions rather than inventing parallel
+ones: `MIMIC_AUTOROOTS` and the same search order for dataset discovery, the same
+MIMIC-III/IV layout detection, `HOURS_WINDOW` and `SEED`, and `_sanitize_tag`'s
+artifact naming so both systems' outputs sort together.
+
+```bash
+python -m data.penux_compat /path/to/penux
+```
+
+Deliberate departures: PenuX forbids pandas and is PyTorch-first. PenuX-II pools
+seven sources with differing schemas and units, where join and reshape logic is
+the substance of the work, and uses tree ensembles because labs are tabular with
+informative missingness — a neural net needs imputation to accept them, and
+imputing a lab that was never ordered discards the fact that nobody ordered it.
+The single-file constraint is honoured where it affects deployment:
+`web/penux2.html` is one self-contained file.
+
+## Differential from lab patterns
+
+`features/lab_interpretation.py` produces a *differential*, not a diagnosis. The
+distinction is not pedantry: isolated hyperkalaemia is a haemolysed sample far
+more often than Addison's disease, and no text mining over the number 6.2 tells
+those apart.
+
+Pattern rules live in code, reviewable and version-controlled. Wikipedia is used
+only to fetch a plain-language explanation for a condition the rules already
+named — putting an anonymously editable source in the clinical path would make
+the medicine unaccountable. Enrichment failure is non-fatal by design.
+
 ## Status
 
-Implemented and verified: data adapters, LOINC harmonization, clinical NLP,
-ensemble, calibration, WASM bundle export (exact against Python), privacy layer.
+Verified: data adapters (real MIMIC-III/IV demo cohorts), LOINC harmonization,
+clinical NLP, ensemble, calibration, WASM bundle export exact against Python
+(1.4e-17 in-browser), Rust scorer (7/7 tests), lab differential, privacy layer,
+single-file page.
 
-Not yet built: the Rust/WASM crate itself, the FastAPI ingest service, and the
-test suite.
+**The shipped model does not discriminate.** Trained on the pooled MIMIC demo
+subsets — 252 training stays — it scores validation AUC 0.530, against 0.5 for
+chance. The demo subsets are far too small to learn from; the page says so in a
+banner rather than implying competence. Point `MIMIC_AUTOROOTS` at full MIMIC-IV
+(~546k stays) and rebuild for a model worth evaluating.
+
+Not built: the FastAPI ingest service and the Python test suite.
+
+Network-blocked in the development environment (org egress policy, HTTP 403):
+NCBI E-utilities and Wikipedia. Both clients are written against the documented
+APIs but unverified against them. The page's calls run in the *user's* browser
+and are unaffected.
 
 ---
 

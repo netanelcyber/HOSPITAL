@@ -83,8 +83,47 @@ def synthesize_cohort(n: int = 6000, seed: int = 7) -> pd.DataFrame:
     return cohort
 
 
-def train_bundle() -> dict:
-    cohort = synthesize_cohort()
+def load_real_cohort(search_base: str | None) -> pd.DataFrame | None:
+    """Pool the MIMIC demo subsets if they can be found.
+
+    The demo subsets are openly licensed, unlike the full datasets, so a model
+    trained on them can ship. They are small (hundreds of stays), which limits
+    what the resulting numbers mean — but they are real patients.
+    """
+    if not search_base:
+        return None
+    try:
+        from data.penux_compat import build_cohort_from_discovery
+
+        cohort = build_cohort_from_discovery(search_base=search_base)
+    except (FileNotFoundError, ValueError) as exc:
+        logger.info("No real cohort available (%s)", exc)
+        return None
+
+    keep = ["deteriorated"] + [f"lab_{name}" for name in PANEL]
+    missing = [c for c in keep if c not in cohort.columns]
+    if missing:
+        logger.info("Real cohort lacks %s; falling back to synthetic", missing)
+        return None
+
+    subset = cohort[keep].copy()
+    subset["deteriorated"] = subset["deteriorated"].astype(int)
+    if subset["deteriorated"].nunique() < 2:
+        return None
+    return subset
+
+
+def train_bundle(search_base: str | None = None) -> dict:
+    real = load_real_cohort(search_base)
+    if real is not None:
+        cohort = real.sample(frac=1.0, random_state=7).reset_index(drop=True)
+        provenance = "mimic-iii-demo + mimic-iv-demo (real patients)"
+        logger.info("Training on %d real stays", len(cohort))
+    else:
+        cohort = synthesize_cohort()
+        provenance = "synthetic"
+        logger.info("Training on synthetic data")
+
     y = cohort["deteriorated"].to_numpy()
 
     split = int(0.7 * len(cohort))
@@ -114,6 +153,8 @@ def train_bundle() -> dict:
     from sklearn.metrics import average_precision_score, roc_auc_score
 
     scores = ensemble.predict_proba(X_val)
+    auc = float(roc_auc_score(y[split:], scores))
+    ap = float(average_precision_score(y[split:], scores))
     logger.info(
         "Embedded model: AUC=%.3f  AP=%.3f  event rate=%.1f%%",
         roc_auc_score(y[split:], scores),
@@ -127,9 +168,14 @@ def train_bundle() -> dict:
         calibrator,
         output_path=ROOT / "wasm" / "page_bundle.json",
         metadata={
-            "trained_on": "synthetic",
+            "trained_on": provenance,
             "panel": PANEL,
-            "note": "Demonstration model. Not trained on patient data.",
+            "n_train": int(split),
+            "n_val": int(len(cohort) - split),
+            "val_auc": auc,
+            "val_ap": ap,
+            "note": "Research model. Demo-subset cohorts are small; metrics "
+                    "do not establish clinical performance.",
         },
     )
 
@@ -151,7 +197,7 @@ def train_bundle() -> dict:
     return bundle
 
 
-def build() -> Path:
+def build(search_base: str | None = None) -> Path:
     wasm_path = (
         ROOT / "wasm" / "target" / "wasm32-unknown-unknown" / "release" / "penux_scorer.wasm"
     )
@@ -161,7 +207,7 @@ def build() -> Path:
             "  cd wasm && cargo build --release --target wasm32-unknown-unknown --lib"
         )
 
-    bundle = train_bundle()
+    bundle = train_bundle(search_base)
     template = (ROOT / "web" / "template.html").read_text()
 
     wasm_b64 = base64.b64encode(wasm_path.read_bytes()).decode()
@@ -184,4 +230,4 @@ def build() -> Path:
 
 
 if __name__ == "__main__":
-    build()
+    build(sys.argv[1] if len(sys.argv) > 1 else None)

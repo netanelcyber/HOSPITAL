@@ -148,6 +148,19 @@ code { direction: ltr; display: inline-block; font-family: ui-monospace, Menlo, 
       </table>
     </div>
 
+    <h3>אבחנה מבדלת — לשקילה</h3>
+    <div class="note warn">
+      <strong>זו אינה אבחנה.</strong> אלו דפוסים שראוי לשקול. בדיקות מעבדה אינן
+      מבססות אבחנה ללא אנמנזה ובדיקה גופנית — היפרקלמיה מבודדת היא דגימה
+      המוליטית הרבה יותר פעמים מאשר מחלת אדיסון. כללי הדפוסים כתובים בקוד וניתנים
+      לביקורת; ויקיפדיה מספקת רק הסבר וקישור למצב שהכללים כבר זיהו.
+    </div>
+    <div id="ddx-list"></div>
+    <div class="row">
+      <button class="ghost" id="btn-wiki">הבא הסברים מוויקיפדיה</button>
+      <span class="status" id="wiki-status"></span>
+    </div>
+
     <h3>שליחה לאחסון מבוזר</h3>
     <p class="sub">כך תיראה הרשומה אילו נשלחה. הכללה מתבצעת כאן, לפני כל בקשת
       רשת — התממה בצד השרת הייתה חסרת ערך, שכן הנתונים הגולמיים כבר היו חוצים
@@ -575,6 +588,163 @@ function analyzeNote(text) {
   return kept;
 }
 
+/* ===================== Differential from lab patterns =====================
+   Rules live here in code, reviewable and version-controlled. They are not
+   mined from prose: putting an anonymously editable source in the clinical
+   path would make the medicine unaccountable. Wikipedia supplies explanation
+   text for a condition the rules already named — readability, not content. */
+
+const SEVERITY_RANK = { critical: 0, marked: 1, mild: 2 };
+
+function gradeLabs(rawLabs) {
+  const graded = {};
+  for (const spec of PANEL) {
+    const v = rawLabs[spec.key];
+    if (v === null || v === undefined || Number.isNaN(v)) continue;
+    let direction = "normal", severity = "normal";
+    if (v < spec.lo) {
+      direction = "low";
+      const r = v / spec.lo;
+      severity = r < 0.5 ? "critical" : r < 0.8 ? "marked" : "mild";
+    } else if (v > spec.hi) {
+      direction = "high";
+      const r = v / spec.hi;
+      severity = r > 2.0 ? "critical" : r > 1.3 ? "marked" : "mild";
+    }
+    if (direction !== "normal") graded[spec.key] = { value: v, direction, severity, spec };
+  }
+  return graded;
+}
+
+const dir = (f, k, d) => f[k] && f[k].direction === d;
+const sev = (f, k, d, levels) => f[k] && f[k].direction === d && levels.includes(f[k].severity);
+
+const DDX_RULES = [
+  { cond: "אי-ספיקת כליות חדה", wiki: "Acute kidney injury", pri: "urgent",
+    why: "קריאטינין ואוריאה מוגברים יחד — הסמן הזוגי הקלאסי לירידה בסינון הגלומרולרי.",
+    on: ["creatinine", "blood_urea_nitrogen"],
+    m: f => dir(f,"creatinine","high") && dir(f,"blood_urea_nitrogen","high") },
+  { cond: "אזוטמיה טרום-כלייתית (חוסר נוזלים)", wiki: "Prerenal kidney failure", pri: "important",
+    why: "אוריאה מוגברת באופן לא-פרופורציוני לקריאטינין — הדפוס של ירידה בזילוח כלייתי לפני נזק לפרנכימה.",
+    on: ["blood_urea_nitrogen"],
+    m: f => sev(f,"blood_urea_nitrogen","high",["marked","critical"]) && !dir(f,"creatinine","high") },
+  { cond: "ספסיס / זיהום מערכתי", wiki: "Sepsis", pri: "urgent",
+    why: "לויקוציטוזיס עם טרומבוציטופניה — צריכת טסיות לצד תגובה לויקוציטרית מרמזת על זיהום מערכתי ולא מקומי.",
+    on: ["white_blood_cell_count", "platelet_count"],
+    m: f => dir(f,"white_blood_cell_count","high") && dir(f,"platelet_count","low") },
+  { cond: "נויטרופניה / דיכוי חיסוני", wiki: "Neutropenia", pri: "urgent",
+    why: "ספירת לויקוציטים נמוכה משמעותית. זיהום עלול להופיע ללא לויקוציטוזיס, ולכן ספירה תקינה אינה מרגיעה.",
+    on: ["white_blood_cell_count"],
+    m: f => sev(f,"white_blood_cell_count","low",["marked","critical"]) },
+  { cond: "היפרקלמיה", wiki: "Hyperkalemia", pri: "urgent",
+    why: "אשלגן מעל הטווח — סיכון להפרעות קצב. המוליזה של הדגימה היא הגורם השכיח ביותר לתוצאה כוזבת, וכדאי לשלול אותה לפני טיפול.",
+    on: ["potassium"],
+    m: f => sev(f,"potassium","high",["marked","critical"]) },
+  { cond: "היפוקלמיה", wiki: "Hypokalemia", pri: "urgent",
+    why: "אשלגן מתחת לטווח, אף הוא אריתמוגני; לרוב בעקבות משתנים או איבודים מהמערכת העיכולית.",
+    on: ["potassium"],
+    m: f => sev(f,"potassium","low",["marked","critical"]) },
+  { cond: "היפרגליקמיה / מצב חירום סוכרתי", wiki: "Diabetic ketoacidosis", pri: "urgent",
+    why: "גלוקוז מוגבר משמעותית. קטואצידוזיס ומצב היפראוסמולרי דורשים שניהם זיהוי דחוף.",
+    on: ["glucose"],
+    m: f => sev(f,"glucose","high",["marked","critical"]) },
+  { cond: "היפוגליקמיה", wiki: "Hypoglycemia", pri: "urgent",
+    why: "גלוקוז מתחת לטווח — סיבה הפיכה מיידית לשינוי במצב ההכרה.",
+    on: ["glucose"],
+    m: f => dir(f,"glucose","low") },
+  { cond: "היפונתרמיה", wiki: "Hyponatremia", pri: "important",
+    why: "נתרן מתחת לטווח. קצב השינוי משמעותי יותר מהערך המוחלט, ותיקון מהיר מדי נושא סיכון בפני עצמו.",
+    on: ["sodium"],
+    m: f => dir(f,"sodium","low") },
+  { cond: "אנמיה", wiki: "Anemia", pri: "important",
+    why: "המוגלובין מתחת לטווח. איבוד דם חד ואנמיה כרונית נראים זהים בדגימה בודדת; המגמה מבחינה ביניהם.",
+    on: ["hemoglobin"],
+    m: f => dir(f,"hemoglobin","low") },
+  { cond: "טרומבוציטופניה", wiki: "Thrombocytopenia", pri: "important",
+    why: "טסיות מתחת לטווח — סיכון דימומי, ובהקשר של מחלה חדה גם סמן לצריכה.",
+    on: ["platelet_count"],
+    m: f => dir(f,"platelet_count","low") && !dir(f,"white_blood_cell_count","high") },
+];
+
+const PRI_ORDER = { urgent: 0, important: 1, routine: 2 };
+const PRI_HE = { urgent: "דחוף", important: "חשוב", routine: "שגרתי" };
+
+function differential(rawLabs) {
+  const f = gradeLabs(rawLabs);
+  if (!Object.keys(f).length) return [];
+  return DDX_RULES.filter(r => { try { return r.m(f); } catch { return false; } })
+    .map(r => ({ ...r, supporting: r.on.filter(k => f[k]) }))
+    .sort((a, b) => PRI_ORDER[a.pri] - PRI_ORDER[b.pri])
+    .slice(0, 6);
+}
+
+let CURRENT_DDX = [];
+
+function renderDifferential(rawLabs) {
+  CURRENT_DDX = differential(rawLabs);
+  const host = $("ddx-list");
+
+  if (!CURRENT_DDX.length) {
+    host.innerHTML = `<p class="sub">לא זוהה דפוס המצדיק אבחנה מבדלת מהערכים שהוזנו.</p>`;
+    $("btn-wiki").disabled = true;
+    return;
+  }
+
+  $("btn-wiki").disabled = false;
+  host.innerHTML = CURRENT_DDX.map((d, i) => `
+    <div class="card" style="margin:10px 0;padding:14px">
+      <div style="display:flex;gap:10px;align-items:baseline;flex-wrap:wrap">
+        <strong>${d.cond}</strong>
+        <span class="pill ${d.pri === "urgent" ? "yes" : "no"}">${PRI_HE[d.pri]}</span>
+        <span class="unit">${d.supporting.map(k =>
+          (PANEL.find(s => s.key === k) || {}).he || k).join(" · ")}</span>
+      </div>
+      <p class="sub" style="margin:8px 0 0">${d.why}</p>
+      <p class="sub" id="wiki-${i}" style="margin:8px 0 0"></p>
+    </div>`).join("");
+}
+
+/** Fetch lead extracts for conditions the rules already selected. */
+async function enrichFromWikipedia() {
+  const status = $("wiki-status");
+  const button = $("btn-wiki");
+  button.disabled = true;
+  status.textContent = "מביא מוויקיפדיה…";
+
+  let ok = 0;
+  for (const [i, d] of CURRENT_DDX.entries()) {
+    const url = "https://en.wikipedia.org/w/api.php?" + new URLSearchParams({
+      action: "query", format: "json", formatversion: "2", origin: "*",
+      titles: d.wiki, prop: "extracts", exintro: "1", explaintext: "1",
+    });
+    try {
+      const res = await fetch(url);
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      const page = ((await res.json()).query || {}).pages?.[0] || {};
+      const extract = (page.extract || "").replace(/\n/g, " ");
+      // First two sentences: the lead opens with the definition and then
+      // drifts into epidemiology and history.
+      const brief = extract.split(". ").slice(0, 2).join(". ");
+      const link = `https://en.wikipedia.org/wiki/${encodeURIComponent(d.wiki.replace(/ /g, "_"))}`;
+      $("wiki-" + i).innerHTML = brief
+        ? `${brief}${brief.endsWith(".") ? "" : "."} <a href="${link}" target="_blank" rel="noopener">ויקיפדיה ↗</a>`
+        : `<a href="${link}" target="_blank" rel="noopener">ויקיפדיה ↗</a>`;
+      ok++;
+    } catch (err) {
+      // Non-fatal by design: the differential came from the curated rules, so
+      // losing the encyclopedia text loses readability, not content.
+      $("wiki-" + i).innerHTML =
+        `<span class="unit">הסבר לא נטען (${err.message}) — ` +
+        `<a href="https://en.wikipedia.org/wiki/${encodeURIComponent(d.wiki.replace(/ /g, "_"))}" ` +
+        `target="_blank" rel="noopener">פתח בוויקיפדיה ↗</a></span>`;
+    }
+  }
+
+  status.textContent = ok ? `נטענו ${ok}/${CURRENT_DDX.length} הסברים`
+                          : "ויקיפדיה לא נגישה — האבחנה המבדלת עצמה אינה תלויה בה";
+  button.disabled = false;
+}
+
 /* ===================== Anonymization preview ===================== */
 
 function bandLab(spec, value) {
@@ -745,6 +915,7 @@ function renderScore(score, rawLabs) {
 
   $("abnormal-rows").innerHTML = rows ||
     `<tr><td colspan="4" class="sub">כל הערכים שנמדדו בטווח הייחוס.</td></tr>`;
+  renderDifferential(rawLabs);
   $("anon-preview").textContent = JSON.stringify(anonymize(rawLabs, score), null, 2);
   $("result").hidden = false;
 }
@@ -827,6 +998,18 @@ async function boot() {
       `המנוע פעיל · ${Engine.featureNames.length} תכונות · נטען ב-${ms} מ"ש`;
     $("btn-score").disabled = false;
 
+    const auc = (Engine.bundle.metadata || {}).val_auc;
+    if (auc != null && auc < 0.65) {
+      const banner = document.createElement("div");
+      banner.className = "note warn";
+      banner.innerHTML =
+        `<strong>המודל הזה כמעט ואינו מפריד.</strong> AUC על ולידציה: ` +
+        `<code>${auc.toFixed(3)}</code> — 0.5 הוא ניחוש אקראי. תת-הקבוצות ` +
+        `הפתוחות של MIMIC מונות מאות אשפוזים בלבד, מעט מכדי ללמוד מהן. ` +
+        `הציונים למטה מדגימים את הצינור, ואין להם משמעות קלינית.`;
+      $("p-score").prepend(banner);
+    }
+
     const meta = Engine.bundle.metadata || {};
     const nTrees = Object.values(Engine.bundle.models)
       .reduce((s, m) => s + m.trees.length, 0);
@@ -852,6 +1035,8 @@ async function boot() {
       ["תכונות", Engine.featureNames.length],
       ["כיול", (Engine.bundle.calibration || {}).method || "ללא"],
       ["אומן על", meta.trained_on || "לא ידוע"],
+      ["גודל קוהורט", meta.n_train ? `${meta.n_train} אימון / ${meta.n_val} ולידציה` : "לא ידוע"],
+      ["AUC (ולידציה)", meta.val_auc != null ? meta.val_auc.toFixed(3) : "לא נמדד"],
       ["בדיקת פריטי בדפדפן", parity],
     ].map(([k, v]) => `<tr><td>${k}</td><td class="ltr">${v}</td></tr>`).join("");
 
@@ -890,6 +1075,7 @@ async function boot() {
     $("result").hidden = true;
   });
 
+  $("btn-wiki").addEventListener("click", enrichFromWikipedia);
   $("btn-nlp").addEventListener("click", () => renderNlp(analyzeNote($("note").value)));
   $("btn-note-example").addEventListener("click", () => {
     $("note").value = EXAMPLE_NOTE;
