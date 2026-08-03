@@ -9,10 +9,11 @@ you don't own.
 | Rank | ID | Candidate (class) | Max CVSS if confirmed | Verifiable here? | Status (2026-08-03) |
 |---|---|---|---|---|---|
 | 1 | **B04** | OpenJPEG JPEG2000 decode — memory corruption | ~9.8 (RCE) | ✅ fuzzing | **Ran. Clean** (30s, 0 crashes, seedless). Unverified, keep hunting. |
-| 2 | **B05** | CharLS JPEG-LS decode — memory corruption | ~9.8 (RCE) | ✅ fuzzing | **Ran. Found CWE-190 signed-overflow** in `dequantize` — UB, *not* memory corruption; low impact; likely known (OSS-Fuzz). Not reportable as-is. |
+| 2 | **B05** | CharLS JPEG-LS decode — memory corruption | ~9.8 (RCE) | ✅ fuzzing | **Ran deep (ASan-only).** No memory corruption. Only benign signed-overflow UB + a slow-unit/timeout (CPU-DoS). Likely known (OSS-Fuzz). Not reportable. |
+| 2b | **B04-via-DICOM** | GDCM JPEG2000 **codec wrapper** (encapsulated DICOM) | ~8–9 (RCE) | ✅ fuzzing | **Ran deep.** Built 36 J2K-encapsulated-DICOM seeds → codec reached (cov 15.9k). No codec corruption; only front-end alloc-DoS OOMs. |
 | 3 | **B06** | RT-STRUCT / waveform parse (GDCM/DCMTK) — memory corruption | ~8–9 | ✅ fuzzing (needs RT seeds) | Reachable via the GDCM harness with RT-STRUCT seeds; not yet seeded. Pending. |
 | 4 | **B07** | Encapsulated-PDF-in-DICOM parse — memory corruption | ~7–8 | ✅ fuzzing (needs PDF-DICOM seeds) | Same GDCM harness, needs seeds. Pending. |
-| 5 | **B04/GDCM** | GDCM allocation-DoS (parser front-end) | 7.5 (DoS) | ✅ fuzzing | **Ran. Found** 163 B → 4.29 GB. **KNOWN = CVE-2026-3650.** Duplicate, not reported. |
+| 5 | **B04/GDCM** | GDCM allocation-DoS (parser front-end) | 7.5 (DoS) | ✅ fuzzing | **Ran. Found** 163 B → 4.29 GB (`ByteValue::SetLength`). **KNOWN = CVE-2026-3650.** Duplicate, not reported. |
 | — | A01 | pynetdicom `storescp` path traversal | 8.1 (write/RCE) | ⚠️ needs a running DICOM SCP | Logic bug — functional PoC on an owned pynetdicom install, not fuzzing. |
 | — | A02 | DICOM field→path traversal (other UIDs) | 8.1 | ⚠️ running SCP | Same as A01. |
 | — | A03 | Zip-Slip in Orthanc/importer | 8.1 | ⚠️ running Orthanc | Functional test on owned Orthanc. |

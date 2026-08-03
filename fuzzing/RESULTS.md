@@ -122,6 +122,38 @@ Follow-up to go deeper on the top-CVSS target (OpenJPEG, B04):
 Status so far: still **no memory-corruption** in OpenJPEG — only the known allocation-DoS
 class. That is a legitimate (negative) result at this coverage depth, not a confirmed bug.
 
+## Parallel deepening — three codecs at once
+
+Ran the top-CVSS memory-corruption class across three targets concurrently
+(oversubscribed on 4 cores, per request for breadth):
+
+### OpenJPEG (B04) — guarded + value-profile
+Grown corpus (2,887 units) + dimension guard + `-use_value_profile=1`. exec/s ~341.
+Only artifacts: `slow-unit`s (slow decode, CPU-DoS-ish) — **no memory corruption**.
+
+### GDCM JPEG2000 wrapper (B04-via-DICOM) — the realistic path, now actually reached
+The earlier GDCM run only hit the DICOM parser front-end. To reach
+`gdcm::JPEG2000Codec`, wrapped 36 real J2K codestreams into **minimal encapsulated
+DICOM** (Python: parse each codestream's SIZ marker for true rows/cols/components/bit-depth,
+emit file-meta with TS `1.2.840.10008.1.2.4.90/.91` + encapsulated PixelData). Validated:
+coverage jumped to **15,883 edges / 41,534 features**, all 36 decode — the codec path is
+genuinely exercised. Deep run artifacts: **only `oom`** = the already-known allocation-DoS
+(CVE-2026-3650 class) in the parser front-end; **no codec memory corruption**. Ran with
+`-jobs=40` so workers self-restart past those benign OOMs.
+
+### CharLS JPEG-LS (B05) — ASan-only to separate UB from corruption
+The `undefined` build kept halting on **signed-integer-overflow** in decode arithmetic
+(`default_traits.hpp:168` `dequantize`, then `run_mode_context.hpp:43`) — benign,
+non-corruption UB, and CharLS is actively OSS-Fuzzed. Rebuilt **ASan-only** to hunt purely
+for memory unsafety. Result: no ASan error — only a **timeout** (a ~1 MB stream that decodes
+very slowly in `read_unary_code`, a CPU-DoS/hang class). **No memory corruption.**
+
+### Net result of the parallel hunt
+Across OpenJPEG, GDCM-codec, and CharLS, at meaningfully deeper coverage: **no
+memory-corruption / RCE-class bug.** Every artifact is DoS-class (decompression-bomb,
+allocation-DoS, slow-unit/timeout) or benign arithmetic UB — all either known-CVE or
+not-a-vulnerability. This is a solid negative result, honestly reported. Nothing disclosed.
+
 ## Nothing was disclosed
 No report was sent to any vendor or CERT. No crash input is committed. The only
 outputs are this summary and the tooling.
