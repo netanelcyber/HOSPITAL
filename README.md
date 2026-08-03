@@ -260,6 +260,48 @@ only to fetch a plain-language explanation for a condition the rules already
 named — putting an anonymously editable source in the clinical path would make
 the medicine unaccountable. Enrichment failure is non-fatal by design.
 
+## Scale and tuning
+
+The pipeline was benchmarked at **1,000,000 stays** (26M lab rows, 1.06 GB) in
+MIMIC-IV schema, read through the ordinary `MimicIVAdapter` — benchmarking
+through a mock would measure the mock.
+
+| | |
+|---|---|
+| Ingest | 101 s, peak RSS 4.55 GB |
+| Train (700k x 81 features) | 35 s, 132 trees after early stopping |
+| ROC-AUC | 0.734 |
+| Average precision | 0.278 against a 0.115 baseline |
+| Brier raw → calibrated | 0.208 → 0.093 |
+| Recall at 5% alert budget | 0.198 (precision 0.370) |
+
+A sweep over depth 5–12 and 300–800 estimators moved validation AP by under
+0.002. At this volume the hyperparameters sit on a plateau and early stopping
+decides the tree count regardless; depth 12 cost 40% more time for nothing. The
+defaults are set mid-plateau (depth 8, 500 permitted iterations, early stopping
+on) rather than at the sweep's nominal winner.
+
+`scripts/generate_scale_cohort.py` writes that cohort. **It is not patient
+data.** The achievable AUC is an artifact of the generator — the numbers to
+trust from it are throughput and memory.
+
+## Distributed stage placement
+
+`training/placement.py` splits pipeline stages across machines or processes
+using rendezvous hashing, which gives the property "random but fixed once
+chosen" directly:
+
+- **deterministic** — same seed, stage and worker set, same answer in any
+  process on any machine
+- **stable under membership change** — removing 1 of 3 workers moved 24% of
+  stages in the shipped example, matching its capacity share. Modulo hashing
+  (`hash(s) % n`) remaps almost everything when `n` changes.
+
+Placement is derived independently by every participant from the seed and
+worker list, so there is no coordinator to fail. Stages that consume the
+ingested frame are pinned to it — moving 26M lab rows between machines costs
+more than the stage does.
+
 ## Status
 
 Verified: data adapters (real MIMIC-III/IV demo cohorts), LOINC harmonization,
