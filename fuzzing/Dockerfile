@@ -34,7 +34,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # libclang-rt-<N>-dev version to it.
 
 # --- Pinned upstream versions -------------------------------------------------
-# Change these to the current release tags before a hunt, then rebuild.
+# These are the pins used for the reference run. BEFORE treating any crash as
+# reportable, bump each to the current upstream release AND reproduce there — a
+# crash on an old pin may already be fixed. (GDCM ships releases newer than
+# v3.0.24, e.g. the 3.2.x line; set GDCM_TAG accordingly.) The GDCM parsej2k_imp
+# finding in RESULTS.md was additionally confirmed on GDCM master HEAD 69b7aea —
+# reproduce on the newest code you can before disclosure, not just this pin.
 ARG OPENJPEG_TAG=v2.5.3
 ARG GDCM_TAG=v3.0.24
 ARG CHARLS_TAG=2.4.2

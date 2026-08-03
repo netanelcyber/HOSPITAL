@@ -116,11 +116,20 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
          * 8Kx8K RGB frame) so the fuzzer spends time in the codec, not the
          * allocator. Mirrors OSS-Fuzz's OpenJPEG harness.
          */
-        unsigned long long w = (unsigned long long)(image->x1 - image->x0);
-        unsigned long long h = (unsigned long long)(image->y1 - image->y0);
-        unsigned long long samples = w * h * (unsigned long long)image->numcomps;
-        if (image->x1 > image->x0 && image->y1 > image->y0 &&
-            samples <= 64ULL * 1024ULL * 1024ULL) {
+        /* Division-based bounds check so a malformed huge w*h*numcomps cannot
+         * wrap uint64 back under the cap and slip through into opj_decode. */
+        const unsigned long long CAP = 64ULL * 1024ULL * 1024ULL; /* samples */
+        int dims_ok = image->x1 > image->x0 && image->y1 > image->y0 &&
+                      image->numcomps > 0;
+        if (dims_ok) {
+            unsigned long long w = (unsigned long long)(image->x1 - image->x0);
+            unsigned long long h = (unsigned long long)(image->y1 - image->y0);
+            unsigned long long nc = (unsigned long long)image->numcomps;
+            if (w > CAP / h / nc) {   /* would exceed CAP without overflowing */
+                dims_ok = 0;
+            }
+        }
+        if (dims_ok) {
             /* Full decode is where most parsing/OOB bugs surface. */
             if (opj_decode(codec, stream, image)) {
                 opj_end_decompress(codec, stream);

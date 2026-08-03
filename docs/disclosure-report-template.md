@@ -80,9 +80,11 @@ Reference the confirmed sibling to show it's a **known pattern, not a one-off** 
 ```
 Privilege required:  Any authenticated OpenEMR account (lowest role suffices,
                      e.g. Receptionist). No admin, no API scope.
-Attack vector:       Authenticated web request (network-adjacent; a valid
+Attack vector:       Authenticated web request over the network (AV:N; a valid
                      low-privilege login, an over-provisioned kiosk account,
-                     or a stolen low-tier credential).
+                     or a stolen low-tier credential). Note: "network-adjacent"
+                     (AV:A) is a DIFFERENT CVSS value — use it only if
+                     exploitation truly needs the same physical/logical LAN.
 Confidentiality:     HIGH — <<n>> patients' PHI (<<names, DOB, dx, messages,
                      billing/claim data — be specific>>) exfiltrated.
 Integrity:           <<HIGH if it also writes/deletes; e.g. "records can be
@@ -90,13 +92,16 @@ Integrity:           <<HIGH if it also writes/deletes; e.g. "records can be
 Availability:        <<usually NONE for read; HIGH if it enables destructive
                      bulk delete>>
 
-Regulatory note: exposure of PHI to users outside their authorized scope is
-a reportable event under HIPAA/GDPR for affected deployments.
+Regulatory note: exposure of PHI outside authorized scope may be a
+reportable breach, but is NOT automatic — HIPAA allows a documented
+low-probability-of-compromise assessment (and has exceptions), and GDPR
+notification depends on risk to individuals. Direct the deployment to its
+privacy/legal team for the breach assessment; do not assert reportability.
 
 Suggested CVSS v3.1:
   <<e.g. AV:N/AC:L/PR:L/UI:N/S:U/C:H/I:N/A:N  → 6.5 (Medium)
      bump PR:L→PR:N only if truly unauthenticated;
-     add I:H/A:H if it deletes → up to 8.1 (High)>>
+     add I:H/A:H if it deletes → AV:N/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:H = 8.8 (High)>>
 ```
 Be honest about `PR` (privileges required). The whole point of this class is `PR:L` — don't inflate to `PR:N` unless the endpoint is genuinely reachable pre-auth.
 
@@ -113,8 +118,11 @@ Preconditions:
 Steps:
   1. As B, log in normally and obtain a valid session cookie + the CSRF
      token OpenEMR issues to B's session.
-  2. Confirm the *intended* boundary: B has no menu/UI path to <<the data>>
-     (i.e. the app believes B is restricted).
+  2. Establish the *intended* boundary from CONFIGURATION, not the UI: an
+     endpoint may be intentionally callable directly even when it's absent
+     from B's menus. Confirm via B's configured ACL / documented policy /
+     an equivalent protected operation that B is genuinely meant to be denied
+     — absence of a menu link alone does NOT prove a boundary.
   3. As B, issue the sensitive request directly to <<endpoint>>:
         <<METHOD>> <<path>>
         params: <<the minimal params, e.g. an id/range + the CSRF token>>

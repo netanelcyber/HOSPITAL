@@ -48,29 +48,56 @@ mkdir -p "${OUT_DIR}"
 export ASAN_OPTIONS="${ASAN_OPTIONS:-abort_on_error=1:allocator_may_return_null=1:detect_leaks=0}"
 export UBSAN_OPTIONS="${UBSAN_OPTIONS:-print_stacktrace=1:halt_on_error=1}"
 
+# Preserve the campaign's timeout so a timeout artifact reproduces promptly
+# instead of blocking on libFuzzer's 1200s default (and so minimization uses the
+# same threshold). Override with TIMEOUT_SEC if your campaign used another value.
+TIMEOUT_SEC="${TIMEOUT_SEC:-25}"
+
 echo "==> Reproducing under ${target} to capture sanitizer stack"
 san_log="${OUT_DIR}/san-${hash}.log"
 # Single-shot replay of the crash input; capture the sanitizer report.
 set +e
-"${bin}" "${crash}" > "${san_log}" 2>&1
+"${bin}" -timeout="${TIMEOUT_SEC}" "${crash}" > "${san_log}" 2>&1
 rc=$?
 set -e
+
+# Abort if the input does NOT reproduce a real failure — a stale/mis-targeted
+# artifact must not be dressed up as a completed triage. Accept only a sanitizer
+# error or a libFuzzer timeout/oom as evidence of reproduction.
+if [ "${rc}" -eq 0 ] || ! grep -Eqi 'ERROR: (AddressSanitizer|libFuzzer)|runtime error:|SUMMARY: (AddressSanitizer|UndefinedBehaviorSanitizer|libFuzzer)' "${san_log}"; then
+    echo "==> NOT REPRODUCED (exit ${rc}); no sanitizer/timeout/oom diagnostic in ${san_log}." >&2
+    echo "    The input may be stale (rebuild) or replayed against the wrong harness. Aborting triage." >&2
+    exit 3
+fi
 
 echo "==> Minimizing input"
 min="${crash}.min"
 set +e
-"${bin}" -minimize_crash=1 -runs=20000 -exact_artifact_path="${min}" "${crash}" \
-    >> "${san_log}" 2>&1
+"${bin}" -minimize_crash=1 -runs=20000 -timeout="${TIMEOUT_SEC}" \
+    -exact_artifact_path="${min}" "${crash}" >> "${san_log}" 2>&1
 set -e
 [ -f "${min}" ] || min="${crash}"   # fall back to original if minimization produced nothing
 
-# --- classify owning component from the top frames ---------------------------
-component="unknown"
-if grep -Eiq 'openjp2|opj_|/openjpeg/' "${san_log}"; then component="OpenJPEG"; fi
-if grep -Eiq 'charls::|/charls/|libcharls' "${san_log}"; then component="CharLS"; fi
-if grep -Eiq 'gdcm::|/gdcm/|libgdcm' "${san_log}"; then
-    # If both appear, the GDCM frame nearer the top usually indicates the wrapper.
-    if [ "${component}" = "OpenJPEG" ]; then component="OpenJPEG (via GDCM wrapper)"; else component="GDCM"; fi
+# --- classify owning component from the TOP faulting frame -------------------
+# Ownership must come from which component owns the nearest-to-#0 application
+# frame, not from mere keyword coexistence: a GDCM wrapper bug and an embedded
+# OpenJPEG frame can both appear in one stack. Walk frames #0.. in order and take
+# the first that names a known component; report ambiguity if unclear.
+first_component() {
+    # emit the owning component of the earliest matching stack frame
+    grep -E '#[0-9]+ 0x' "${san_log}" | while read -r line; do
+        case "${line}" in
+            *openjp2*|*/openjpeg/*|*" opj_"*) echo "OpenJPEG"; return 0 ;;
+            *charls::*|*/charls/*|*libcharls*) echo "CharLS"; return 0 ;;
+            *gdcm::*|*/gdcm/*|*libgdcm*)       echo "GDCM"; return 0 ;;
+        esac
+    done
+}
+component="$(first_component | head -n1)"
+[ -z "${component}" ] && component="unknown (inspect stack manually)"
+# If both GDCM and OpenJPEG appear anywhere, flag the wrapper-vs-codec ambiguity.
+if grep -Eiq 'gdcm::|/gdcm/|libgdcm' "${san_log}" && grep -Eiq 'openjp2|opj_|/openjpeg/' "${san_log}"; then
+    component="${component} (GDCM+OpenJPEG both present — confirm top frame: wrapper bug vs embedded codec)"
 fi
 
 # --- guess CWE from the sanitizer verb --------------------------------------
@@ -104,8 +131,10 @@ top_frames="$(grep -E '#[0-9]+ 0x' "${san_log}" | head -n 8 || true)"
     echo "Next: fill ../docs/disclosure-report-template.md and route per"
     echo "../docs/suspected-cve-candidates.md:"
     echo "  - OpenJPEG      -> GitHub advisory (uclouvain/openjpeg) or MITRE"
+    echo "  - CharLS        -> GitHub private advisory (team-charls/charls) —"
+    echo "                     active maintainer, on OSS-Fuzz; do NOT use the CISA path"
     echo "  - GDCM          -> CERT/CC (VINCE), maintainer unresponsive"
-    echo "  - either        -> CISA (medical-imaging coordination)"
+    echo "  - any           -> CISA (medical-imaging coordination), except CharLS"
     echo "  - IL-deployed   -> also CERT-IL (report@cyber.gov.il, tel 119)"
     echo
     echo "Do NOT publish the raw minimized input publicly until fixes ship downstream."

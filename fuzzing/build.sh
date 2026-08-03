@@ -31,6 +31,25 @@ BIN_FLAGS="-g -O1 -fno-omit-frame-pointer -fsanitize=fuzzer,${SAN} ${NOSAN}"
 
 mkdir -p "${BUILD_DIR}" "${OUT_DIR}"
 
+# Record pinned source SHAs for host builds too (the Dockerfile writes this at
+# image-build time; direct SRC_DIR/WORK_DIR builds must generate it themselves so
+# triage.sh and the disclosure report have real "version tested" provenance).
+{
+    for repo in openjpeg gdcm charls; do
+        if [ -d "${SRC_DIR}/${repo}/.git" ]; then
+            printf '%-9s %s %s\n' "${repo}" \
+                "$(git -C "${SRC_DIR}/${repo}" describe --tags --always 2>/dev/null || echo '?')" \
+                "$(git -C "${SRC_DIR}/${repo}" rev-parse HEAD 2>/dev/null || echo '?')"
+        fi
+    done
+    # GDCM links its OWN bundled OpenJPEG (GDCM_USE_SYSTEM_OPENJPEG=OFF), NOT the
+    # standalone /src/openjpeg tree above. A crash the gdcm target attributes to
+    # OpenJPEG therefore reproduces on GDCM's vendored copy, whose revision is the
+    # gdcm SHA — not necessarily the standalone OPENJPEG_TAG. Note this in reports.
+    echo "note: gdcm target uses GDCM's bundled OpenJPEG (provenance = the gdcm SHA above)"
+} > "${OUT_DIR}/versions.txt"
+cat "${OUT_DIR}/versions.txt"
+
 echo "==> Building OpenJPEG (static, instrumented)"
 cmake -S "${SRC_DIR}/openjpeg" -B "${BUILD_DIR}/openjpeg" -G Ninja \
     -DCMAKE_BUILD_TYPE=Debug \

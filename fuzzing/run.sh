@@ -15,7 +15,6 @@ set -euo pipefail
 WORK_DIR="${WORK_DIR:-/work}"
 OUT_DIR="${WORK_DIR}/out"
 CORPUS_DIR="${WORK_DIR}/corpus"
-CRASH_DIR="${WORK_DIR}/crashes"
 
 target="${1:-}"
 shift || true
@@ -30,6 +29,10 @@ case "${target}" in
         ;;
 esac
 
+# Per-target crash dir so concurrently-fuzzed targets don't share a prefix —
+# an artifact's owning harness must stay unambiguous for replay/triage.
+CRASH_DIR="${WORK_DIR}/crashes_${target}"
+
 if [ ! -x "${bin}" ]; then
     echo "error: ${bin} not built. Run ./build.sh first." >&2
     exit 1
@@ -41,11 +44,16 @@ mkdir -p "${CORPUS_DIR}" "${CRASH_DIR}"
 export ASAN_OPTIONS="${ASAN_OPTIONS:-abort_on_error=1:allocator_may_return_null=1:detect_leaks=0}"
 export UBSAN_OPTIONS="${UBSAN_OPTIONS:-print_stacktrace=1:halt_on_error=1}"
 
-# Single-allocation ceiling. GDCM's DICOM parser eagerly allocates from an
-# unvalidated element-length field, so it trivially OOMs on a huge advertised
-# length (a KNOWN allocation-DoS class, e.g. CVE-2026-3650). Capping malloc lets
-# libFuzzer flag that quickly and keep hunting for real memory-corruption instead
-# of dying on the first OOM. Set MALLOC_LIMIT_MB=0 to disable.
+# Single-allocation ceiling. IMPORTANT: -malloc_limit_mb does NOT skip an input
+# and continue — per libFuzzer, "the fuzzer will exit if the target tries to
+# allocate this number of Mb", writing an oom- artifact and terminating the
+# process. GDCM's DICOM parser eagerly allocates multi-GB from an unvalidated
+# element-length field (the KNOWN allocation-DoS, CVE-2026-3650 class), so in a
+# single-process run this still stops the campaign on that known condition.
+# The real fix is to filter/guard the known allocation IN THE HARNESS (as
+# harness_openjpeg.c does for image dimensions); this cap only makes the OOM
+# fast to spot. To survive it in a campaign, pair with -jobs=N so libFuzzer
+# restarts a fresh worker after each OOM. Set MALLOC_LIMIT_MB=0 to disable.
 MALLOC_LIMIT_MB="${MALLOC_LIMIT_MB:-512}"
 malloc_arg=()
 [ "${MALLOC_LIMIT_MB}" != "0" ] && malloc_arg=(-malloc_limit_mb="${MALLOC_LIMIT_MB}")

@@ -31,12 +31,15 @@
 
 תשע חולשות שסומנו **CVE-2026-5437 עד CVE-2026-5445**, המשפיעות על **כל הגרסאות עד 1.12.10 כולל**. השורש: אימות לקוי של מטא-דאטה, בדיקות חסרות, וחישובים אריתמטיים לא בטוחים.
 
+הטבלה מציגה **מדגם מייצג** של 4 מתוך 9 (הבולטות ביותר); CVE-2026-5441 עד 5445 אינן מפורטות כאן — לפרטים המלאים ראו CERT/CC VU#536588 ואת הודעת Orthanc:
+
 | CVE | סוג | השפעה |
 |---|---|---|
 | CVE-2026-5437 | Out-of-bounds read בפרסר של ה-meta-header | דליפת מידע / קריסה |
 | CVE-2026-5438 | GZIP decompression bomb בטיפול בבקשות HTTP | מיצוי משאבים |
 | CVE-2026-5439 | מיצוי זיכרון בעיבוד ארכיוני ZIP | DoS |
 | CVE-2026-5440 | Heap-based buffer overflow בפרסינג/דקודינג תמונות | פוטנציאל ל-**RCE** |
+| CVE-2026-5441 … 5445 | (מדגם — לא מפורט; ראו VU#536588) | קריסה / דליפה / DoS |
 
 **תיקון:** שדרוג ל-**Orthanc 1.12.11**. ראו גם CERT/CC VU#536588.
 
@@ -142,7 +145,7 @@ Mirth יושב בדרך כלל במרכז הרשת הקלינית עם קישו�
 | CVE-2026-34360 | — | Blind SSRF ב-`/loadIG`. תוקף לא-מאומת עם גישת רשת לוולידטור סורק שירותים פנימיים, **endpoint-ים של cloud metadata**, וממפה טופולוגיית רשת דרך דליפת מידע מבוססת-שגיאות. |
 | CVE-2026-55471 | — | **XXE** ב-`XsltUtilities.saxonTransform()`. כל ה-overloads מייצרים `net.sf.saxon.TransformerFactoryImpl()` חשוף ללא הגבלת external-access, כך ש-XML עובר פרסינג עם ישויות חיצוניות ו-DTD חיצוני מאופשרים → קריאת קבצים מקומיים ו-blind XXE/SSRF. |
 
-**תוקן ב-HAPI FHIR 6.9.4.**
+**תוקן בגרסה 6.9.4 של ארטיפקטי ה-Maven** `org.hl7.fhir.validation` / `org.hl7.fhir.core` / `org.hl7.fhir.utilities` — **לא בהכרח מספר גרסת אפליקציית HAPI FHIR**. יש לוודא את גרסת התלות (`org.hl7.fhir.*`) המותקנת בפועל, כי גרסת אפליקציה עשויה למשוך ארטיפקט validator ישן וחשוף.
 
 ### 4.3 HAPI FHIR — חולשות נוספות
 
@@ -180,7 +183,7 @@ Mirth יושב בדרך כלל במרכז הרשת הקלינית עם קישו�
 
 | מכשיר | התראה | ממצא |
 |---|---|---|
-| Contec Health CMS8000 (מוניטור מטופל) | ICSMA-25-030-01 | תוקף שולח בקשות UDP מעוצבות או מתחבר ל**רשת חיצונית לא מזוהה** ← כתיבת נתונים שרירותית ו-RCE. המכשיר גם מדליף מידע מטופלים ונתוני חיישנים לאותה רשת חיצונית. |
+| Contec Health CMS8000 (מוניטור מטופל) | ICSMA-25-030-01 | **שתי התנהגויות נפרדות:** (1) תוקף שולח בקשות **UDP** מעוצבות → כתיבת נתונים שרירותית ו-RCE; (2) **המכשיר עצמו יוזם חיבור יוצא** לכתובת חיצונית **מקודדת-קשיח** ומדליף אליה מידע מטופלים ונתוני חיישנים (backdoor). **מיטיגציה נפרדת לכל אחת:** חסימת/ניטור ה-UDP הנכנס, **וגם** חסימת/ניטור התעבורה ה**יוצאת** לכתובת הקשיחה. |
 | Medtronic MyCareLink | ICSMA-25-205-01 | סיכון נמוך — דורש חבלה פיזית. עדכוני אבטחה מיוני 2025. |
 | Fourth Frontier Frontier X / X2 | ICSMA-26-148-01 | אפליקציה ניידת + מכשיר לבישה |
 | Apollo Pharmacy APG-01 BT (מד סוכר) | ICSMA-26-169-01 | **CVE-2026-50034 + CVE-2026-52866** — BLE: אימות לקוי מאפשר pairing ללא אישור משתמש, ושידור **לא מוצפן** של ערכי סוכר והגדרות. תוקף בטווח BLE מיירט מידע בריאותי ב-plaintext. Apollo לא נענתה ל-CISA. |
@@ -231,11 +234,11 @@ Mirth יושב בדרך כלל במרכז הרשת הקלינית עם קישו�
 
 ### 8.3 מוצרים ב"סיכון מוגבר" ללא מתחזק פעיל
 
-שני מקרים שבהם CISA ציינה שהמתחזק **לא נענה** — כלומר גם אם תתגלה חולשה חדשה, לא צפוי תיקון:
-- **GDCM** — המתחזק לא נענה לפניות CISA (סעיף 5). כל שימוש חדש בו נושא סיכון שיורי קבוע.
-- **pynetdicom (`qrscp`)** — אין גרסת תיקון ל-CVE-2026-56445.
+יש להבחין בין **מתחזק שאינו מגיב** לבין **חולשה שטרם תוקנה**:
+- **GDCM** — המתחזק **לא נענה** לפניות CISA (סעיף 5). כאן ההנחה "חולשות נוספות יתגלו ולא יתוקנו" מוצדקת; סיכון שיורי קבוע.
+- **pynetdicom (`qrscp`)** — **אין גרסת תיקון** ל-CVE-2026-56445 (נכון לכתיבה), אך זו קביעה על **זמינות טלאי בלבד** — CISA לא דיווחה על מתחזק לא-מגיב. אין להסיק מכך שהפרויקט נטוש; ייתכן שתיקון יגיע.
 
-עבור מוצרים אלה, ההנחה התכנונית צריכה להיות "חולשות נוספות יתגלו ולא יתוקנו" — ולכן חובה sandbox ובקרות מפצות (סעיף 9), לא ציפייה לטלאי.
+בשני המקרים, עד שיש טלאי, חובה sandbox ובקרות מפצות (סעיף 9) — אך רק ל-GDCM מוצדקת ההנחה שהתחזוקה עצמה כשלה.
 
 ---
 
@@ -243,12 +246,14 @@ Mirth יושב בדרך כלל במרכז הרשת הקלינית עם קישו�
 
 ### תעדוף מיידי — עדכונים
 - [ ] **Mirth Connect** → 4.4.1+ (RCE לא-מאומת, בניצול אקטיבי) — הגבוה ביותר בעדיפות
-- [ ] **OpenEMR** → 8.0.0+
+- [ ] **OpenEMR** → **8.0.0.3+** (8.0.0–8.0.0.2 עדיין חשופות לגל השלישי — XSS ומחיקת קבצי claim עם PHI)
 - [ ] **OpenMRS** → 2.7.9 / 2.8.6+
 - [ ] **Orthanc** → 1.12.11
+- [ ] **Santesoft Sante PACS** → **4.2.3+** (חמש חולשות, MS-ISAC "PATCH NOW")
+- [ ] **DCMTK** → **3.7.0+** (path traversal קריטי CVSS 9.8, CVE-2026-50003)
 - [ ] **OHIF** → 3.12.2+ (וניקוי קונפיגורציות `DicomWebProxyDataSource` / `DicomJSONDataSource` שאינן בשימוש)
-- [ ] **HAPI FHIR** → 6.9.0+ ומעלה, ובדיקת חשיפת endpoint ה-Validator
-- [ ] **MicroDicom** → 2025.1+ / הגרסה האחרונה
+- [ ] **HAPI FHIR** → שדרוג הארטיפקטים `org.hl7.fhir.validation/core/utilities` ל-**6.9.4+** (זו הגרסה של ארטיפקטי ה-Validator ב-Maven שמתקנת את loadIG/XXE — לא בהכרח מספר גרסת אפליקציית HAPI FHIR; ודאו את גרסת התלות המותקנת), ובדיקת חשיפת endpoint ה-Validator
+- [ ] **MicroDicom** → גרסה **חדשה מ-2025.2 build 8154** (זו והקודמות פגיעות ל-RCE, CVE-2025-5943); אם אין — בקרות מפצות
 - [ ] **pynetdicom / GDCM** → אין תיקון זמין. יש להחיל בקרות מפצות (ראו למטה).
 
 ### בקרות מפצות במקום שאין טלאי
@@ -258,14 +263,15 @@ Mirth יושב בדרך כלל במרכז הרשת הקלינית עם קישו�
 
 ### הקשחת רשת ותצורה
 - [ ] אף שרת DICOM/PACS אינו חשוף ישירות לאינטרנט. אימות מול Shodan/Censys מנקודת מבט חיצונית.
-- [ ] אכיפת **AE Title** בפועל — לא הגדרה בלבד, אלא בדיקה אקטיבית שחיבור עם AE Title לא מוכר נדחה.
-- [ ] TLS על תעבורת DICOM (`DICOM-TLS`), ולא רק בשכבת ה-HTTP.
+- [ ] אכיפת **AE Title** כ-**defense-in-depth בלבד** — ה-AE Title הוא מזהה שנשלט ע"י השולח וניתן לזייף/להעתיק, ולכן **אינו אימות עמית**. גבול אמיתי מחייב **DICOM-TLS עם אימות הדדי**, VPN, או בקרת גישה ברמת הרשת.
+- [ ] TLS על תעבורת DICOM (`DICOM-TLS`, רצוי mutual-TLS), ולא רק בשכבת ה-HTTP.
 - [ ] סגמנטציית רשת בין הרשת הקלינית, רשת המכשור (IoMT) ורשת ה-IT הארגונית.
 - [ ] **MFA לכל גישת ספק צד-ג'**, וביטול הרשאות אדמין קבועות לטובת גישה מוגבלת בזמן.
 - [ ] הרשאה מזערית לחשבונות API (במיוחד מול OpenEMR REST API — שם הפער בין "מאומת" ל"DB מלא" הוא CVSS 9.9).
 
 ### ניטור וזיהוי
-- [ ] התראה על תעבורת DICOM יוצאת ליעדים לא מוכרים (וקטור ה-SSRF של OHIF וה-C-GET של DCMTK).
+- [ ] התראה על תעבורת DICOM יוצאת ליעדים לא מוכרים (וקטור ה-C-GET של DCMTK).
+- [ ] **עבור OHIF במיוחד:** ניטור והגבלת **egress של HTTP(S)/DNS** מ-backend ה-viewer/proxy — ה-SSRF של OHIF (DICOMWebProxy/DICOMJSON) מושך URL תוקף ב-HTTP ודולף טוקן OIDC; ניטור תעבורת DICOM בלבד **לא** יזהה אותו.
 - [ ] ניטור קריסות של תהליכי PACS — memory corruption מתחיל לרוב כ-DoS לפני שהופך ל-RCE יציב.
 - [ ] מעקב אחר **CISA ICS Medical Advisories (ICSMA)** כערוץ קבוע.
 - [ ] הצלבת מלאי המכשירים מול קטלוג ה-**KEV** של CISA.
@@ -303,7 +309,7 @@ Mirth יושב בדרך כלל במרכז הרשת הקלינית עם קישו�
 **HL7 / FHIR / אינטגרציה**
 - [CVE-2023-43208 (Mirth Connect RCE): Analysis & Detection — Huntress](https://www.huntress.com/threat-library/vulnerabilities/cve-2023-43208)
 - [Critical NextGen Healthcare Mirth Connect Vulnerability Under Active Exploitation — HIPAA Journal](https://www.hipaajournal.com/critical-nextgen-healthcare-mirth-connect-under-active-exploitation/)
-- [HAPI FHIR SSRF+credential leak, CVE-2026-34361 — GitLab Advisories](https://advisories.gitlab.com/pkg/maven/ca.uhn.hapi.fhir/org.hl7.fhir.validation/CVE-2026-34361/) · [CVE-2026-34360 Blind SSRF via /loadIG](https://advisories.gitlab.com/pkg/maven/ca.uhn.hapi.fhir/org.hl7.fhir.core/CVE-2026-34360/) · [CVE-2026-55471 XXE saxonTransform](https://advisories.gitlab.com/maven/ca.uhn.hapi.fhir/org.hl7.fhir.utilities/CVE-2026-55471/)
+- [HAPI FHIR SSRF+credential leak, CVE-2026-34361 — GitLab Advisories](https://advisories.gitlab.com/pkg/maven/ca.uhn.hapi.fhir/org.hl7.fhir.validation/CVE-2026-34361/) · [CVE-2026-34360 Blind SSRF via /loadIG](https://advisories.gitlab.com/pkg/maven/ca.uhn.hapi.fhir/org.hl7.fhir.core/CVE-2026-34360/) · [CVE-2026-55471 XXE saxonTransform](https://advisories.gitlab.com/pkg/maven/ca.uhn.hapi.fhir/org.hl7.fhir.utilities/CVE-2026-55471/)
 - [HAPI FHIR Unauthenticated SSRF Leads to Auth Token Theft — TheHackerWire](https://www.thehackerwire.com/hapi-fhir-unauthenticated-ssrf-leads-to-auth-token-theft/)
 - [SSRF Attacks on EHR Integration APIs — Prophaze](https://www.prophaze.com/ssrf-attacks-ehr-integration-apis-blind-spot-in-healthcare/)
 - [CVE-2026-33180: HAPI FHIR Information Disclosure — SentinelOne](https://www.sentinelone.com/vulnerability-database/cve-2026-33180/)

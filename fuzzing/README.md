@@ -28,14 +28,28 @@ angle belongs to a separate **CharLS / JPEG-LS** harness (`SUSP-BIO-05`).
 ```bash
 # from the repo root
 docker build -t biofuzz fuzzing/
-docker run --rm -it -v "$PWD/fuzzing/out:/work/out" biofuzz
 
-# inside the container:
-./run.sh openjpeg      # or: ./run.sh gdcm
-# ... let it run; crashes land in ./crashes/ ...
-./triage.sh crashes/crash-<hash>
-cat out/versions.txt   # exact pinned SHAs for the disclosure "version tested" field
+# Do NOT bind-mount over /work/out — the image builds fuzz_openjpeg/fuzz_gdcm/
+# fuzz_charls and versions.txt there, and mounting an empty host dir hides them
+# (run.sh would then report "not built"). Mount dedicated host dirs for the
+# artifacts you want to KEEP after the --rm container exits: the per-target crash
+# dirs and the corpus (run.sh writes reproducers to crashes_<target>/ and grows
+# corpus/ in place; both are lost with the container otherwise).
+mkdir -p fuzzing/persist/corpus fuzzing/persist/crashes_openjpeg
+docker run --rm -it \
+    -v "$PWD/fuzzing/persist/corpus:/work/corpus" \
+    -v "$PWD/fuzzing/persist/crashes_openjpeg:/work/crashes_openjpeg" \
+    biofuzz
+
+# inside the container (both harness binaries exist, so name the target explicitly):
+./run.sh openjpeg      # or: ./run.sh gdcm | ./run.sh charls
+# ... let it run; crashes land in ./crashes_openjpeg/ ...
+./triage.sh openjpeg crashes_openjpeg/crash-<hash>   # target is REQUIRED here
+cat out/versions.txt   # pinned SHAs for the disclosure "version tested" field
 ```
+> To keep GDCM/CharLS artifacts too, add `-v .../crashes_gdcm:/work/crashes_gdcm`
+> (and `crashes_charls`) mounts. Never commit crash inputs to git — persist them
+> to a host dir only, for private disclosure.
 
 ## ⚠️ Seeds matter more than anything (read before a real hunt)
 
@@ -47,12 +61,22 @@ seeds:
 - the GDCM harness mostly exercises the DICOM **parser front-end** (where a
   *known* allocation-DoS lives, CVE-2026-3650) rather than `gdcm::JPEG2000Codec`.
 
-Before a serious hunt, populate `corpus/` with real J2K:
+Before a serious hunt, populate `corpus/` with real J2K. Note the image's
+`build.sh` sets `BUILD_CODEC=OFF` / `GDCM_BUILD_APPLICATIONS=OFF`, so
+`opj_compress`/`gdcmconv` are **not** in the image, and a plain non-shallow clone
+does **not** fetch submodules. Use one of these that actually works:
 ```bash
-# full clones (not --depth 1) pull the test-data submodules; or generate:
-opj_compress -i input.pnm -o seed.j2k
-gdcmconv --j2k input.dcm seed_j2k.dcm      # J2K-encapsulated DICOM for the GDCM harness
+# (a) get the upstream conformance test data (submodules, recursively):
+git clone --recurse-submodules https://github.com/uclouvain/openjpeg.git
+git clone --recurse-submodules https://github.com/malaterre/GDCM.git   # includes gdcmData
+#     then copy their *.j2k / *.jp2 / *.dcm into corpus/
+
+# (b) or build the generators yourself (outside the fuzz image), then encode:
+#     cmake -DBUILD_CODEC=ON ... openjpeg  -> opj_compress -i input.pnm -o seed.j2k
+#     cmake -DGDCM_BUILD_APPLICATIONS=ON ... GDCM -> gdcmconv --j2k in.dcm seed.dcm
 ```
+The reference run generated seeds via method (b) built separately — the fuzz
+image itself cannot produce them.
 
 ## Bumping to the pinned-latest before a real hunt
 

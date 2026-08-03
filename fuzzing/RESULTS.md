@@ -143,10 +143,16 @@ genuinely exercised. Deep run artifacts: **only `oom`** = the already-known allo
 
 ### CharLS JPEG-LS (B05) — ASan-only to separate UB from corruption
 The `undefined` build kept halting on **signed-integer-overflow** in decode arithmetic
-(`default_traits.hpp:168` `dequantize`, then `run_mode_context.hpp:43`) — benign,
-non-corruption UB, and CharLS is actively OSS-Fuzzed. Rebuilt **ASan-only** to hunt purely
-for memory unsafety. Result: no ASan error — only a **timeout** (a ~1 MB stream that decodes
-very slowly in `read_unary_code`, a CPU-DoS/hang class). **No memory corruption.**
+(`default_traits.hpp:168` `dequantize`, then `run_mode_context.hpp:43`). Rebuilt **ASan-only**
+to hunt purely for memory unsafety. Result: no ASan error — only a **timeout** (a ~1 MB stream
+that decodes very slowly in `read_unary_code`, a CPU-DoS/hang class). **No memory corruption.**
+
+⚠️ **The signed overflow is NOT resolved — do not call it "benign".** ASan does not diagnose
+arithmetic UB, so a clean ASan run says nothing about it, and because these sources are
+optimized the compiler may assume signed overflow never happens. Treat it as **open** until
+either the arithmetic is fixed or it is analyzed under a recovering UBSan config
+(`-fsanitize-recover=signed-integer-overflow` + `halt_on_error=0`) that proves the value is
+safely clamped. It is likely already known (OSS-Fuzz), but "known" ≠ "safe".
 
 ### Net result of the parallel hunt
 OpenJPEG and CharLS: no memory-corruption (only DoS-class artifacts + benign arithmetic UB).
@@ -157,7 +163,12 @@ heap-buffer-overflow (out-of-bounds READ, CWE-125) in GDCM's JPEG2000 header/mar
 (`parsej2k_imp` / `read16`, reached via `ImageReader` on a malformed encapsulated JPEG2000
 codestream). Two independent inputs trigger it; confirmed on GDCM v3.0.24.
 
-Severity is Medium (an OOB **read** → heap info-leak / crash, not a demonstrated write/RCE).
+The **demonstrated** effect is an invalid memory access → **crash (DoS)**. Whether adjacent
+heap bytes actually reach an attacker-visible response is **not proven by the ASan read alone**
+— that needs a separate data-flow / output-channel analysis. So describe impact as a crash, and
+label confidentiality (potential heap info-leak) as **unconfirmed** until that analysis is done;
+do not inflate the CVSS confidentiality metric on the strength of the ASan read. Estimated
+severity Medium at most, and not a demonstrated write/RCE.
 
 **Novelty is PLAUSIBLE but unconfirmed.** The known GDCM OOB-read CVEs are in *other* codecs
 (`RAWCodec`, `RLECodec`, `JPEGBITSCodec`) and in the JPEG2000 *decode* path
