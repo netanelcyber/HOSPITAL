@@ -87,10 +87,13 @@ RCE-class bug the memory-corruption hunt targets. Not reported.
 1. **Get real seeds** (the single biggest lever): full (non-shallow) OpenJPEG/GDCM
    clones with their test-data submodules, or generate J2K/J2K-encapsulated-DICOM
    with `opj_compress` / `gdcmconv --j2k`. Put them in `corpus/`.
-2. **Separate OOMs from corruption:** run with `-malloc_limit_mb=512` so the known
-   allocation-DoS is flagged and skipped, letting the fuzzer keep hunting for real
-   memory-corruption instead of stopping on the first OOM. (Now wired into `run.sh`
-   via the `MALLOC_LIMIT_MB` knob.)
+2. **Separate OOMs from corruption:** `-malloc_limit_mb=512` (the `MALLOC_LIMIT_MB` knob
+   in `run.sh`) makes an oversized allocation exit **fast** with a distinct `oom-` artifact
+   — but in a single-process run it **terminates** the fuzzer, it does not skip the input.
+   To actually keep hunting past the known GDCM allocation-DoS you must pair it with
+   **`-jobs=N` so libFuzzer restarts a fresh worker after each OOM**, and/or add a
+   **harness-side guard** (as `harness_openjpeg.c` does for image dimensions). The cap
+   alone does not continue the campaign.
 3. **Run long:** hours per target, ideally parallel (`-jobs -workers`), and reuse the
    grown corpus across runs.
 4. Only a **reproducible ASan heap-overflow/UAF on the pinned-latest** that survives

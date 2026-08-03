@@ -95,13 +95,18 @@ set -e
 # Re-validate: the minimized file must still reproduce the SAME owning frame as
 # the original replay. If it drifted (or produced nothing), fall back to the
 # original input so the report never pairs one defect's CWE with another's repro.
-orig_top="$(grep -E '#0 0x' "${san_log}" | head -n1 | sed -E 's/.* in ([^ ]+).*/\1/')"
+# Frame lookup must tolerate zero matches: a libFuzzer OOM/timeout report can
+# carry the accepted diagnostic with NO `#0 0x` app frame. Under `set -o pipefail`
+# a no-match grep would fail the whole pipeline and abort triage here, so guard
+# with `|| true`; an empty orig_top then simply means "no frame to compare" and
+# the fallback below still runs.
+orig_top="$( { grep -E '#0 0x' "${san_log}" || true; } | head -n1 | sed -E 's/.* in ([^ ]+).*/\1/')"
 if [ -f "${min}" ]; then
     min_log="${OUT_DIR}/san-${hash}.min.log"
     set +e
     "${bin}" "${lim_args[@]}" "${min}" > "${min_log}" 2>&1
     set -e
-    min_top="$(grep -E '#0 0x' "${min_log}" | head -n1 | sed -E 's/.* in ([^ ]+).*/\1/')"
+    min_top="$( { grep -E '#0 0x' "${min_log}" || true; } | head -n1 | sed -E 's/.* in ([^ ]+).*/\1/')"
     if [ -z "${min_top}" ] || { [ -n "${orig_top}" ] && [ "${min_top}" != "${orig_top}" ]; }; then
         echo "==> Minimized input drifted (top frame '${min_top}' != '${orig_top}'); using ORIGINAL as reproducer." >&2
         min="${crash}"
@@ -116,8 +121,9 @@ fi
 # OpenJPEG frame can both appear in one stack. Walk frames #0.. in order and take
 # the first that names a known component; report ambiguity if unclear.
 first_component() {
-    # emit the owning component of the earliest matching stack frame
-    grep -E '#[0-9]+ 0x' "${san_log}" | while read -r line; do
+    # emit the owning component of the earliest matching stack frame.
+    # `|| true`: a frame-less OOM/timeout log must not fail the pipeline.
+    { grep -E '#[0-9]+ 0x' "${san_log}" || true; } | while read -r line; do
         case "${line}" in
             *openjp2*|*/openjpeg/*|*" opj_"*) echo "OpenJPEG"; return 0 ;;
             *charls::*|*/charls/*|*libcharls*) echo "CharLS"; return 0 ;;
@@ -125,7 +131,7 @@ first_component() {
         esac
     done
 }
-component="$(first_component | head -n1)"
+component="$(first_component | head -n1 || true)"
 [ -z "${component}" ] && component="unknown (inspect stack manually)"
 # If both GDCM and OpenJPEG appear anywhere, flag the wrapper-vs-codec ambiguity.
 if grep -Eiq 'gdcm::|/gdcm/|libgdcm' "${san_log}" && grep -Eiq 'openjp2|opj_|/openjpeg/' "${san_log}"; then
