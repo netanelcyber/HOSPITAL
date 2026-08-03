@@ -10,7 +10,10 @@
 //! is eligible to be submitted anywhere.
 
 use serde::{Deserialize, Serialize};
+#[cfg(feature = "bindgen")]
 use wasm_bindgen::prelude::*;
+
+pub mod raw_abi;
 
 /// One decision tree, stored as parallel arrays indexed by node id.
 ///
@@ -238,95 +241,101 @@ impl Bundle {
     }
 }
 
+#[cfg(feature = "bindgen")]
+mod js_interface {
+    use super::*;
 // ---------------------------------------------------------------------------
-// JavaScript interface
-// ---------------------------------------------------------------------------
-
-#[wasm_bindgen]
-pub struct Scorer {
-    bundle: Bundle,
-}
-
-#[wasm_bindgen]
-impl Scorer {
-    /// Load a bundle from its JSON text.
-    #[wasm_bindgen(constructor)]
-    pub fn new(bundle_json: &str) -> Result<Scorer, JsValue> {
-        let bundle: Bundle = serde_json::from_str(bundle_json)
-            .map_err(|e| JsValue::from_str(&format!("invalid bundle: {e}")))?;
-
-        if bundle.format_version != 1 {
-            return Err(JsValue::from_str(&format!(
-                "unsupported bundle format version {}; this build reads version 1",
-                bundle.format_version
-            )));
+    // JavaScript interface
+    // ---------------------------------------------------------------------------
+    
+    #[wasm_bindgen]
+    pub struct Scorer {
+        bundle: Bundle,
+    }
+    
+    #[wasm_bindgen]
+    impl Scorer {
+        /// Load a bundle from its JSON text.
+        #[wasm_bindgen(constructor)]
+        pub fn new(bundle_json: &str) -> Result<Scorer, JsValue> {
+            let bundle: Bundle = serde_json::from_str(bundle_json)
+                .map_err(|e| JsValue::from_str(&format!("invalid bundle: {e}")))?;
+    
+            if bundle.format_version != 1 {
+                return Err(JsValue::from_str(&format!(
+                    "unsupported bundle format version {}; this build reads version 1",
+                    bundle.format_version
+                )));
+            }
+    
+            Ok(Scorer { bundle })
         }
-
-        Ok(Scorer { bundle })
-    }
-
-    /// Feature names, in the order `score` expects them.
-    #[wasm_bindgen(getter)]
-    pub fn feature_names(&self) -> Vec<JsValue> {
-        self.bundle
-            .feature_names
-            .iter()
-            .map(|name| JsValue::from_str(name))
-            .collect()
-    }
-
-    #[wasm_bindgen(getter)]
-    pub fn n_features(&self) -> usize {
-        self.bundle.feature_names.len()
-    }
-
-    /// Score one patient. NaN marks an unmeasured lab and takes the tree's
-    /// missing branch rather than being imputed — which test was ordered is
-    /// itself informative.
-    pub fn score(&self, features: &[f64]) -> Result<f64, JsValue> {
-        self.bundle
-            .score_row(features)
-            .map_err(|e| JsValue::from_str(&e.to_string()))
-    }
-
-    /// Score a batch laid out row-major, avoiding per-row JS boundary crossings.
-    pub fn score_batch(&self, flat: &[f64], n_rows: usize) -> Result<Vec<f64>, JsValue> {
-        let width = self.bundle.feature_names.len();
-        if n_rows * width != flat.len() {
-            return Err(JsValue::from_str(&format!(
-                "expected {} values for {n_rows} rows of {width} features, got {}",
-                n_rows * width,
-                flat.len()
-            )));
+    
+        /// Feature names, in the order `score` expects them.
+        #[wasm_bindgen(getter)]
+        pub fn feature_names(&self) -> Vec<JsValue> {
+            self.bundle
+                .feature_names
+                .iter()
+                .map(|name| JsValue::from_str(name))
+                .collect()
         }
-
-        (0..n_rows)
-            .map(|i| {
-                self.bundle
-                    .score_row(&flat[i * width..(i + 1) * width])
-                    .map_err(|e| JsValue::from_str(&e.to_string()))
-            })
-            .collect()
-    }
-
-    /// Apply training-time preprocessing in place, returning the scaled vector.
-    pub fn preprocess(&self, raw: &[f64]) -> Vec<f64> {
-        let mut values = raw.to_vec();
-        self.bundle.preprocess(&mut values);
-        values
-    }
-
-    /// Risk band for a calibrated score. Thresholds match the server's bands
-    /// so a client and the aggregate view never disagree about a patient.
-    pub fn risk_band(&self, score: f64) -> String {
-        match score {
-            s if s < 0.30 => "low",
-            s if s < 0.50 => "moderate",
-            s if s < 0.70 => "high",
-            _ => "critical",
+    
+        #[wasm_bindgen(getter)]
+        pub fn n_features(&self) -> usize {
+            self.bundle.feature_names.len()
         }
-        .to_string()
+    
+        /// Score one patient. NaN marks an unmeasured lab and takes the tree's
+        /// missing branch rather than being imputed — which test was ordered is
+        /// itself informative.
+        pub fn score(&self, features: &[f64]) -> Result<f64, JsValue> {
+            self.bundle
+                .score_row(features)
+                .map_err(|e| JsValue::from_str(&e.to_string()))
+        }
+    
+        /// Score a batch laid out row-major, avoiding per-row JS boundary crossings.
+        pub fn score_batch(&self, flat: &[f64], n_rows: usize) -> Result<Vec<f64>, JsValue> {
+            let width = self.bundle.feature_names.len();
+            if n_rows * width != flat.len() {
+                return Err(JsValue::from_str(&format!(
+                    "expected {} values for {n_rows} rows of {width} features, got {}",
+                    n_rows * width,
+                    flat.len()
+                )));
+            }
+    
+            (0..n_rows)
+                .map(|i| {
+                    self.bundle
+                        .score_row(&flat[i * width..(i + 1) * width])
+                        .map_err(|e| JsValue::from_str(&e.to_string()))
+                })
+                .collect()
+        }
+    
+        /// Apply training-time preprocessing in place, returning the scaled vector.
+        pub fn preprocess(&self, raw: &[f64]) -> Vec<f64> {
+            let mut values = raw.to_vec();
+            self.bundle.preprocess(&mut values);
+            values
+        }
+    
+        /// Risk band for a calibrated score. Thresholds match the server's bands
+        /// so a client and the aggregate view never disagree about a patient.
+        pub fn risk_band(&self, score: f64) -> String {
+            match score {
+                s if s < 0.30 => "low",
+                s if s < 0.50 => "moderate",
+                s if s < 0.70 => "high",
+                _ => "critical",
+            }
+            .to_string()
+        }
     }
+    
+    
 }
 
 #[cfg(test)]

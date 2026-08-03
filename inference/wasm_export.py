@@ -292,13 +292,55 @@ def export_bundle(
         "metadata": metadata or {},
     }
 
+    _reject_non_finite(bundle)
+
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    output_path.write_text(json.dumps(bundle))
+    # allow_nan=False: Python emits bare `NaN`/`Infinity`, which is not valid
+    # JSON and which strict parsers (serde, and every browser) reject. Writing
+    # it would produce a bundle that only Python can read.
+    output_path.write_text(json.dumps(bundle, allow_nan=False))
 
     size_kb = output_path.stat().st_size / 1024
     logger.info("Wrote %s (%.1f KB)", output_path, size_kb)
     return bundle
+
+
+def _reject_non_finite(bundle: Dict) -> None:
+    """Fail on NaN/Inf in the parts the scorer reads as plain f64.
+
+    A NaN threshold or scaler constant makes every comparison against it false,
+    so the tree silently routes every patient down one branch. `metadata` is
+    exempt: it holds fixtures where NaN legitimately marks an unmeasured lab,
+    and those are serialized as null instead.
+    """
+    def walk(node, path: str) -> None:
+        if isinstance(node, dict):
+            for key, value in node.items():
+                if key == "metadata":
+                    continue
+                walk(value, f"{path}.{key}")
+        elif isinstance(node, list):
+            for index, value in enumerate(node):
+                walk(value, f"{path}[{index}]")
+        elif isinstance(node, float) and not np.isfinite(node):
+            raise ValueError(
+                f"Non-finite value {node} at {path}; the scorer reads these as "
+                "plain f64 and a NaN threshold routes every patient one way."
+            )
+
+    walk(bundle, "bundle")
+
+
+def _json_safe(value):
+    """Recursively convert NaN/Inf to None so the value survives strict JSON."""
+    if isinstance(value, dict):
+        return {k: _json_safe(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_json_safe(v) for v in value]
+    if isinstance(value, float) and not np.isfinite(value):
+        return None
+    return value
 
 
 def _export_preprocessing(lab_extractor) -> Dict:

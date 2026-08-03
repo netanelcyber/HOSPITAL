@@ -19,3 +19,5 @@ logs/
 results/
 .pytest_cache/
 wasm/tests/fixture_*.json
+wasm/page_bundle.json
+web/penux2.html

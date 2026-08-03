@@ -110,15 +110,15 @@ class LabFeatureExtractor:
         if self.handle_missing == "mean":
             df_clean = df_clean.fillna(self.feature_means)
 
-        # Scale features
-        scaled_values = self.scaler.transform(df_clean)
+        # Engineered features are derived BEFORE scaling. They compare each
+        # value against its clinical reference range in real units, so a
+        # z-scored input would be measuring a standard deviation against mg/dL
+        # and mean nothing.
+        df_result = self._add_engineered_features(df_result, lab_cols)
 
-        # Update DataFrame with scaled values
+        scaled_values = self.scaler.transform(df_clean)
         for i, col in enumerate(lab_cols):
             df_result[col] = scaled_values[:, i]
-
-        # Add engineered features
-        df_result = self._add_engineered_features(df_result, lab_cols)
 
         return df_result
 

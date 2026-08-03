@@ -1,0 +1,938 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PenuX-II — חיזוי החמרת מצב מטופלים</title>
+<style>
+:root {
+  --bg: #f6f7f9; --surface: #ffffff; --text: #14171c; --muted: #5c6472;
+  --line: #dfe3e9; --accent: #2f5fd0; --accent-soft: #eaf0fd;
+  --low: #1a7f52; --moderate: #a4720d; --high: #c0562a; --critical: #b0243c;
+  --radius: 10px;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #101318; --surface: #181c23; --text: #e7eaef; --muted: #98a2b3;
+    --line: #2a303a; --accent: #6f9cf5; --accent-soft: #1b2436;
+    --low: #4bbd85; --moderate: #d5a53c; --high: #e58a5c; --critical: #ec6d86;
+  }
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--bg); color: var(--text);
+  font-family: "Segoe UI", "Noto Sans Hebrew", Arial, system-ui, sans-serif;
+  font-size: 15px; line-height: 1.65;
+}
+.wrap { max-width: 1080px; margin: 0 auto; padding: 24px 18px 80px; }
+header { border-bottom: 1px solid var(--line); padding-bottom: 18px; margin-bottom: 24px; }
+h1 { font-size: 1.6rem; margin: 0 0 6px; letter-spacing: -0.01em; }
+h2 { font-size: 1.1rem; margin: 0 0 14px; }
+h3 { font-size: 0.95rem; margin: 20px 0 8px; color: var(--muted); }
+.sub { color: var(--muted); margin: 0; font-size: 0.92rem; }
+.card {
+  background: var(--surface); border: 1px solid var(--line);
+  border-radius: var(--radius); padding: 20px; margin-bottom: 18px;
+}
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
+label { display: block; font-size: 0.82rem; color: var(--muted); margin-bottom: 4px; }
+input, textarea, select, button {
+  font: inherit; color: var(--text); background: var(--surface);
+  border: 1px solid var(--line); border-radius: 7px; padding: 8px 10px; width: 100%;
+}
+input:focus, textarea:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+textarea { min-height: 110px; resize: vertical; direction: ltr; text-align: left; font-size: 0.88rem; }
+button {
+  background: var(--accent); color: #fff; border: none; cursor: pointer;
+  font-weight: 600; width: auto; padding: 10px 20px;
+}
+button:hover { filter: brightness(1.08); }
+button:disabled { opacity: 0.5; cursor: not-allowed; }
+button.ghost { background: transparent; color: var(--accent); border: 1px solid var(--line); }
+.row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-top: 16px; }
+.unit { font-size: 0.72rem; color: var(--muted); }
+.score-wrap { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
+.score { font-size: 3rem; font-weight: 700; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
+.band { font-size: 1rem; font-weight: 600; padding: 4px 12px; border-radius: 999px; }
+.band.low { color: var(--low); background: color-mix(in srgb, var(--low) 14%, transparent); }
+.band.moderate { color: var(--moderate); background: color-mix(in srgb, var(--moderate) 14%, transparent); }
+.band.high { color: var(--high); background: color-mix(in srgb, var(--high) 14%, transparent); }
+.band.critical { color: var(--critical); background: color-mix(in srgb, var(--critical) 16%, transparent); }
+.meter { height: 8px; background: var(--line); border-radius: 999px; overflow: hidden; margin: 14px 0 4px; }
+.meter > i { display: block; height: 100%; border-radius: 999px; transition: width .3s ease; }
+.scroll { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 0.85rem; min-width: 520px; }
+th, td { text-align: right; padding: 7px 10px; border-bottom: 1px solid var(--line); }
+th { color: var(--muted); font-weight: 600; font-size: 0.76rem; text-transform: uppercase; letter-spacing: .04em; }
+td.ltr { direction: ltr; text-align: left; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 0.8rem; }
+.pill { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 0.74rem; font-weight: 600; }
+.yes { color: var(--critical); background: color-mix(in srgb, var(--critical) 14%, transparent); }
+.no  { color: var(--muted); background: color-mix(in srgb, var(--muted) 12%, transparent); }
+.ok  { color: var(--low); background: color-mix(in srgb, var(--low) 14%, transparent); }
+.note {
+  border-inline-start: 3px solid var(--accent); background: var(--accent-soft);
+  padding: 12px 14px; border-radius: 0 var(--radius) var(--radius) 0;
+  font-size: 0.87rem; margin: 14px 0;
+}
+.warn { border-inline-start-color: var(--critical); background: color-mix(in srgb, var(--critical) 8%, transparent); }
+.status { font-size: 0.82rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); margin-bottom: 20px; flex-wrap: wrap; }
+.tab {
+  padding: 9px 16px; cursor: pointer; border: none; background: none;
+  color: var(--muted); font-weight: 600; width: auto; border-radius: 0;
+  border-bottom: 2px solid transparent; font-size: 0.9rem;
+}
+.tab[aria-selected="true"] { color: var(--accent); border-bottom-color: var(--accent); }
+.panel[hidden] { display: none; }
+article.paper { line-height: 1.8; }
+article.paper h4 { margin: 22px 0 6px; font-size: 0.95rem; }
+article.paper p { margin: 0 0 12px; }
+.refs { font-size: 0.84rem; }
+.refs li { margin-bottom: 8px; }
+.refs a { color: var(--accent); }
+footer { margin-top: 30px; padding-top: 18px; border-top: 1px solid var(--line); color: var(--muted); font-size: 0.82rem; }
+code { direction: ltr; display: inline-block; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 0.85em; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <h1>PenuX-II</h1>
+  <p class="sub">חיזוי החמרת מצב מטופלים מבדיקות מעבדה · חישוב מקומי ב-WebAssembly</p>
+</header>
+
+<div class="note">
+  <strong>הנתונים אינם עוזבים את הדפדפן.</strong> הניקוד מתבצע ב-WebAssembly על
+  מכונה זו. הדף אינו יוצר בקשות רשת כלל — למעט חיפוש PMC בלשונית "מחולל
+  המאמרים", שנשלח רק בלחיצה מפורשת ואינו כולל נתוני מטופל.
+</div>
+
+<div class="tabs" role="tablist">
+  <button class="tab" role="tab" aria-selected="true" data-panel="p-score">ניקוד סיכון</button>
+  <button class="tab" role="tab" aria-selected="false" data-panel="p-nlp">ניתוח דוח רפואי</button>
+  <button class="tab" role="tab" aria-selected="false" data-panel="p-paper">מחולל מאמרים (PMC)</button>
+  <button class="tab" role="tab" aria-selected="false" data-panel="p-about">אודות</button>
+</div>
+
+<!-- ==================== ניקוד ==================== -->
+<section class="panel" id="p-score">
+  <div class="card">
+    <h2>פאנל מעבדה</h2>
+    <p class="sub">השאירו שדה ריק כאשר הבדיקה לא בוצעה. ערך חסר עובר בענף הייעודי
+      של העץ — <strong>אילו</strong> בדיקות הוזמנו הוא כשלעצמו מידע.</p>
+    <div class="grid" id="labs" style="margin-top:16px"></div>
+    <div class="row">
+      <button id="btn-score">חשב סיכון</button>
+      <button class="ghost" id="btn-normal">ערכים תקינים</button>
+      <button class="ghost" id="btn-sick">דוגמה חריגה</button>
+      <button class="ghost" id="btn-clear">נקה</button>
+      <span class="status" id="engine-status">טוען מנוע…</span>
+    </div>
+  </div>
+
+  <div class="card" id="result" hidden>
+    <h2>תוצאה</h2>
+    <div class="score-wrap">
+      <span class="score" id="score-value">—</span>
+      <span class="band" id="score-band">—</span>
+    </div>
+    <div class="meter"><i id="score-bar" style="width:0%"></i></div>
+    <p class="sub" id="score-caption"></p>
+
+    <h3>ערכים חריגים</h3>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>בדיקה</th><th>ערך</th><th>טווח ייחוס</th><th>סטטוס</th></tr></thead>
+        <tbody id="abnormal-rows"></tbody>
+      </table>
+    </div>
+
+    <h3>שליחה לאחסון מבוזר</h3>
+    <p class="sub">כך תיראה הרשומה אילו נשלחה. הכללה מתבצעת כאן, לפני כל בקשת
+      רשת — התממה בצד השרת הייתה חסרת ערך, שכן הנתונים הגולמיים כבר היו חוצים
+      את הרשת.</p>
+    <div class="scroll"><pre class="ltr" id="anon-preview" style="font-size:.8rem"></pre></div>
+  </div>
+</section>
+
+<!-- ==================== NLP ==================== -->
+<section class="panel" id="p-nlp" hidden>
+  <div class="card">
+    <h2>ניתוח דוח רפואי — NegEx/ConText</h2>
+    <p class="sub">ספירת מילות מפתח <strong>הופכת את הסימן</strong> בטקסט קליני,
+      משום שרוב מה שדוח אומר על ממצא הוא שהוא נעדר. הניתוח כאן פותר לכל ממצא
+      קוטביות, חווה, זמניות וּודאות.</p>
+    <textarea id="note" spellcheck="false"></textarea>
+    <div class="row">
+      <button id="btn-nlp">נתח</button>
+      <button class="ghost" id="btn-note-example">טען דוגמה</button>
+    </div>
+  </div>
+
+  <div class="card" id="nlp-result" hidden>
+    <h2>ממצאים</h2>
+    <div class="scroll">
+      <table>
+        <thead><tr>
+          <th>מושג</th><th>טקסט</th><th>סקציה</th>
+          <th>נשלל</th><th>היסטורי</th><th>בן משפחה</th><th>מסויג</th><th>פעיל</th><th>משקל</th>
+        </tr></thead>
+        <tbody id="nlp-rows"></tbody>
+      </table>
+    </div>
+    <p class="sub" id="nlp-summary" style="margin-top:14px"></p>
+    <div class="note">
+      המודל המוטמע בדף מנקד <strong>מבדיקות מעבדה בלבד</strong>. ניתוח הטקסט
+      מוצג כהקשר לרופא ואינו מוזרם לציון: מימוש JS שסוטה במעט מהמימוש ב-Python
+      היה מזיז כל ניבוי בשקט — וזו בדיוק התקלה שבדיקת הפריטי נועדה למנוע.
+    </div>
+  </div>
+</section>
+
+<!-- ==================== PMC ==================== -->
+<section class="panel" id="p-paper" hidden>
+  <div class="card">
+    <h2>מחולל טיוטת מאמר</h2>
+    <p class="sub">מרכיב טיוטת מאמר מתוצאות המודל, עם ציטוטים מ-PubMed Central.</p>
+    <div class="note warn">
+      <strong>ציטוטים אינם מומצאים.</strong> הדף מצטט אך ורק מאמרים שהוחזרו בפועל
+      מ-PMC, עם ה-PMCID שלהם. אם החיפוש נכשל, פרק המקורות נשאר ריק ונרשמת הודעה
+      מפורשת — טיוטה עם מקורות בדויים מסוכנת יותר מטיוטה בלי מקורות.
+    </div>
+    <div class="grid" style="margin-top:14px">
+      <div>
+        <label for="q">שאילתת חיפוש ב-PMC</label>
+        <input id="q" dir="ltr" value="clinical deterioration prediction laboratory tests machine learning">
+      </div>
+      <div>
+        <label for="qn">מספר מקורות</label>
+        <input id="qn" type="number" value="6" min="1" max="20">
+      </div>
+    </div>
+    <div class="row">
+      <button id="btn-paper">חולל טיוטה</button>
+      <span class="status" id="pmc-status"></span>
+    </div>
+  </div>
+
+  <div class="card" id="paper-out" hidden>
+    <article class="paper" id="paper-body"></article>
+    <div class="row"><button class="ghost" id="btn-copy">העתק כ-Markdown</button></div>
+  </div>
+</section>
+
+<!-- ==================== אודות ==================== -->
+<section class="panel" id="p-about" hidden>
+  <div class="card">
+    <h2>אודות</h2>
+    <p>PenuX-II מנבא החמרה קלינית מבדיקות מעבדה. הדוח הרפואי החופשי משמש כערוץ
+      עזר בלבד, והמערכת מנבאת גם כשאין דוח כלל.</p>
+
+    <h3>למה חישוב בדפדפן</h3>
+    <p>נתוני מעבדה הם המידע הרגיש ביותר שבית חולים מחזיק, והבקשה הבטוחה ביותר
+      היא זו שלעולם לא נשלחת. הקובץ הזה עצמאי לחלוטין: אין CDN, אין שרת, ואפשר
+      להריץ אותו מ-<code>file://</code>.</p>
+
+    <h3>למה עצי החלטה</h3>
+    <p>טיפול טבעי בערכים חסרים, ללא צורך באימפוטציה, וכל ניבוי מתפרק למסלול
+      ניתן לביקורת של השוואות על ערכי מעבדה אמיתיים.</p>
+
+    <h3>אימות</h3>
+    <p>מנוע ה-Rust מאומת מול מימוש הייחוס ב-Python על 200 שורות הכוללות ערכים
+      חסרים, בסטייה מרבית מתחת ל-<code>1e-9</code>. מודל שמנקד אחרת בדפדפן מאשר
+      באימון שגוי בשקט עבור כל מטופל, והעצים ייטענו והציונים ייראו סבירים.</p>
+    <p class="sub">באג שנמצא בדרך: <code>scikit-learn</code> מפצל על
+      <code>&lt;=</code> ואילו <code>XGBoost</code> על <code>&lt;</code>. ההבדל
+      נוגע רק לשורות שיושבות בדיוק על הסף, ולכן שורד בדיקה שטחית.</p>
+
+    <div class="scroll"><table>
+      <thead><tr><th>רכיב</th><th>ערך</th></tr></thead>
+      <tbody id="about-rows"></tbody>
+    </table></div>
+  </div>
+</section>
+
+<footer>
+  <strong>תוכנת מחקר.</strong> אינה מכשיר רפואי, לא עברה אימות פרוספקטיבי, ואין
+  להשתמש בה לקבלת החלטות טיפוליות.
+</footer>
+
+</div>
+
+<script id="wasm-b64" type="application/octet-stream">__WASM_BASE64__</script>
+<script id="bundle-b64" type="application/octet-stream">__BUNDLE_BASE64__</script>
+<script>
+"use strict";
+
+/* ===================== Hebrew labels & reference ranges ===================== */
+
+const PANEL = [
+  { key: "glucose",                 he: "גלוקוז",           unit: "mg/dL",   lo: 70,  hi: 100  },
+  { key: "hemoglobin",              he: "המוגלובין",        unit: "g/dL",    lo: 12,  hi: 17.5 },
+  { key: "potassium",               he: "אשלגן",            unit: "mmol/L",  lo: 3.5, hi: 5.0  },
+  { key: "sodium",                  he: "נתרן",             unit: "mmol/L",  lo: 135, hi: 145  },
+  { key: "creatinine",              he: "קריאטינין",        unit: "mg/dL",   lo: 0.7, hi: 1.3  },
+  { key: "blood_urea_nitrogen",     he: "אוריאה (BUN)",     unit: "mg/dL",   lo: 7,   hi: 20   },
+  { key: "platelet_count",          he: "טסיות",            unit: "K/µL",    lo: 150, hi: 400  },
+  { key: "white_blood_cell_count",  he: "לויקוציטים",       unit: "K/µL",    lo: 4.5, hi: 11   },
+];
+
+const BANDS = [
+  { max: 0.30, key: "low",      he: "נמוך"  },
+  { max: 0.50, key: "moderate", he: "בינוני" },
+  { max: 0.70, key: "high",     he: "גבוה"  },
+  { max: Infinity, key: "critical", he: "קריטי" },
+];
+
+const bandOf = s => BANDS.find(b => s < b.max);
+
+function decodeBase64(id) {
+  const text = document.getElementById(id).textContent.trim();
+  const binary = atob(text);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return bytes;
+}
+
+/* ===================== WASM engine (raw ABI, no glue) ===================== */
+
+const Engine = {
+  exports: null,
+  featureNames: [],
+
+  async init() {
+    const wasmBytes = decodeBase64("wasm-b64");
+    // No imports: the module is pure computation with no host calls, which is
+    // what lets it run from file:// with no network and no permissions.
+    const { instance } = await WebAssembly.instantiate(wasmBytes, {});
+    this.exports = instance.exports;
+
+    const bundleBytes = decodeBase64("bundle-b64");
+    const ptr = this.exports.penux_alloc(bundleBytes.length);
+    new Uint8Array(this.exports.memory.buffer, ptr, bundleBytes.length).set(bundleBytes);
+    const rc = this.exports.penux_load_bundle(ptr, bundleBytes.length);
+    this.exports.penux_free(ptr);
+    if (rc !== 0) throw new Error("טעינת המודל נכשלה: " + this.lastError());
+
+    const n = this.exports.penux_n_features();
+    this.featureNames = Array.from({ length: n }, (_, i) => this.featureName(i));
+    this.bundle = JSON.parse(new TextDecoder().decode(bundleBytes));
+    return this;
+  },
+
+  readString(writer) {
+    const cap = 512;
+    const ptr = this.exports.penux_alloc(cap);
+    const len = writer(ptr, cap);
+    const text = new TextDecoder().decode(
+      new Uint8Array(this.exports.memory.buffer, ptr, len)
+    );
+    this.exports.penux_free(ptr);
+    return text;
+  },
+
+  lastError()      { return this.readString((p, c) => this.exports.penux_last_error(p, c)); },
+  featureName(i)   { return this.readString((p, c) => this.exports.penux_feature_name(i, p, c)); },
+
+  /**
+   * Score a feature vector.
+   *
+   * `preprocess` must be false for vectors that already went through the
+   * training-time scaler. Scaling twice is silent — the score stays in [0, 1]
+   * and merely becomes wrong — which is why the self-test below exists.
+   */
+  score(values, preprocess = true) {
+    const ptr = this.exports.penux_alloc(values.length * 8);
+    // The view is created after the allocation: growing linear memory detaches
+    // existing views, and a stale one would read freed memory.
+    new Float64Array(this.exports.memory.buffer, ptr, values.length).set(values);
+    if (preprocess) this.exports.penux_preprocess(ptr, values.length);
+    const score = this.exports.penux_score(ptr, values.length);
+    this.exports.penux_free(ptr);
+    if (score < 0) throw new Error(this.lastError());
+    return score;
+  },
+};
+
+/* ===================== Feature assembly =====================
+   The engineered features must be built exactly as LabFeatureExtractor builds
+   them; the bundle's feature_names list is the contract, so each name is
+   resolved by rule rather than by position. */
+
+function buildFeatureVector(rawLabs) {
+  const byName = {};
+
+  for (const spec of PANEL) {
+    const v = rawLabs[spec.key];
+    byName["lab_" + spec.key] = (v === null || v === undefined || Number.isNaN(v)) ? NaN : v;
+
+    const mid = (spec.lo + spec.hi) / 2;
+    const halfRange = (spec.hi - spec.lo) / 2;
+    byName["lab_" + spec.key + "_abnormality"] =
+      Number.isNaN(byName["lab_" + spec.key]) ? NaN : Math.abs((v - mid) / halfRange);
+    byName["lab_" + spec.key + "_critical"] =
+      Number.isNaN(byName["lab_" + spec.key]) ? NaN
+        : ((v < spec.lo * 0.67 || v > spec.hi * 1.5) ? 1 : 0);
+  }
+
+  const ab = k => byName["lab_" + k + "_abnormality"];
+  const mean = xs => {
+    const ok = xs.filter(x => !Number.isNaN(x));
+    return ok.length ? ok.reduce((a, b) => a + b, 0) / ok.length : NaN;
+  };
+
+  byName["kidney_risk"]      = mean([ab("creatinine"), ab("blood_urea_nitrogen")]);
+  byName["electrolyte_risk"] = mean([ab("sodium"), ab("potassium")]);
+  byName["coagulation_risk"] = mean([ab("platelet_count")]);
+
+  const abnormalities = PANEL.map(s => ab(s.key));
+  byName["total_abnormality_count"] = abnormalities.filter(x => !Number.isNaN(x) && x > 1).length;
+  byName["total_critical_count"] =
+    PANEL.map(s => byName["lab_" + s.key + "_critical"]).filter(x => x === 1).length;
+
+  return Engine.featureNames.map(name =>
+    name in byName ? byName[name] : NaN
+  );
+}
+
+/* ===================== Clinical NLP (ConText) ===================== */
+
+const CONCEPTS = [
+  { n: "cardiac_arrest",       w: 5.0, c: "critical",    he: "דום לב",              p: ["cardiac arrest", "asystole"] },
+  { n: "septic_shock",         w: 5.0, c: "critical",    he: "הלם ספטי",            p: ["septic shock", "shock"] },
+  { n: "sepsis",               w: 4.0, c: "critical",    he: "ספסיס",               p: ["sepsis", "septic", "bacteremia"] },
+  { n: "respiratory_failure",  w: 4.0, c: "critical",    he: "אי-ספיקה נשימתית",    p: ["respiratory failure", "respiratory distress", "intubated", "ards"] },
+  { n: "renal_failure",        w: 3.5, c: "critical",    he: "אי-ספיקת כליות",      p: ["renal failure", "acute kidney injury", "aki", "dialysis"] },
+  { n: "hepatic_failure",      w: 3.5, c: "critical",    he: "אי-ספיקת כבד",        p: ["liver failure", "hepatic failure", "cirrhosis"] },
+  { n: "hypotension",          w: 3.0, c: "instability", he: "תת-לחץ דם",           p: ["hypotension", "hypotensive", "vasopressor", "norepinephrine"] },
+  { n: "altered_mental",       w: 3.0, c: "instability", he: "שינוי במצב הכרה",     p: ["altered mental status", "unresponsive", "obtunded", "delirium"] },
+  { n: "hypoxia",              w: 2.5, c: "instability", he: "היפוקסיה",            p: ["hypoxia", "hypoxemia", "desaturation"] },
+  { n: "hemorrhage",           w: 3.0, c: "instability", he: "דימום",               p: ["hemorrhage", "active bleeding", "gi bleed", "melena"] },
+  { n: "arrhythmia",           w: 2.5, c: "instability", he: "הפרעת קצב",           p: ["arrhythmia", "atrial fibrillation", "bradycardia", "tachycardia"] },
+  { n: "myocardial_infarction",w: 3.0, c: "acute",       he: "אוטם שריר הלב",       p: ["myocardial infarction", "stemi", "nstemi"] },
+  { n: "stroke",               w: 3.0, c: "acute",       he: "שבץ",                 p: ["stroke", "cva"] },
+  { n: "pulmonary_embolism",   w: 3.0, c: "acute",       he: "תסחיף ריאתי",         p: ["pulmonary embolism", "dvt"] },
+  { n: "pneumonia",            w: 2.0, c: "acute",       he: "דלקת ריאות",          p: ["pneumonia", "consolidation", "infiltrate"] },
+  { n: "infection",            w: 1.5, c: "acute",       he: "זיהום",               p: ["infection", "cellulitis", "abscess", "fever", "febrile"] },
+  { n: "diabetes",             w: 1.0, c: "comorbidity", he: "סוכרת",               p: ["diabetes", "diabetic"] },
+  { n: "heart_failure",        w: 1.5, c: "comorbidity", he: "אי-ספיקת לב",         p: ["heart failure", "chf", "cardiomyopathy"] },
+  { n: "copd",                 w: 1.2, c: "comorbidity", he: "COPD",                p: ["copd", "emphysema"] },
+  { n: "ckd",                  w: 1.5, c: "comorbidity", he: "מחלת כליות כרונית",   p: ["chronic kidney disease", "ckd", "esrd"] },
+  { n: "malignancy",           w: 1.5, c: "comorbidity", he: "ממאירות",             p: ["cancer", "malignancy", "carcinoma", "metastatic"] },
+  { n: "improving",            w: -1.5, c: "protective", he: "שיפור",               p: ["improving", "improved", "stable", "afebrile", "recovering"] },
+  { n: "discharge_ready",      w: -2.0, c: "protective", he: "מוכן לשחרור",         p: ["discharge", "ready for discharge"] },
+];
+
+const NEG_PRE = ["no evidence of", "no sign of", "not consistent with", "without evidence of",
+  "ruled out", "rule out", "denies", "denied", "negative for", "free of", "absence of",
+  "without", "resolved", "no", "not", "never"];
+const NEG_POST = ["is ruled out", "was ruled out", "is negative", "was negative",
+  "not seen", "not present", "is absent", "unlikely"];
+const FAMILY = ["family history", "mother", "father", "sister", "brother", "son",
+  "daughter", "aunt", "uncle", "grandmother", "grandfather", "maternal", "paternal"];
+const HISTORICAL = ["history of", "hx of", "h/o", "past medical history", "pmh",
+  "previous", "previously", "prior", "status post", "s/p", "years ago"];
+const UNCERTAIN = ["possible", "possibly", "probable", "likely", "suspected",
+  "suspicious for", "concern for", "question of", "may be", "might be",
+  "cannot exclude", "cannot rule out", "presumed", "borderline"];
+const TERMINATORS = ["but", "however", "although", "though", "except", "otherwise", "which"];
+
+const SECTIONS = {
+  chief_complaint: ["chief complaint", "cc"],
+  hpi: ["history of present illness", "hpi"],
+  past_medical_history: ["past medical history", "pmh"],
+  family_history: ["family history", "fh"],
+  physical_exam: ["physical exam", "examination"],
+  assessment: ["assessment", "impression", "a/p"],
+  plan: ["plan", "disposition"],
+};
+const SECTION_HE = {
+  chief_complaint: "תלונה עיקרית", hpi: "מהלך המחלה",
+  past_medical_history: "היסטוריה רפואית", family_history: "היסטוריה משפחתית",
+  physical_exam: "בדיקה גופנית", assessment: "הערכה", plan: "תוכנית", unknown: "—",
+};
+
+const NON_PATIENT_SECTIONS = new Set(["family_history"]);
+const HISTORICAL_SECTIONS = new Set(["past_medical_history"]);
+
+const rx = terms => new RegExp(
+  "\\b(" + [...terms].sort((a, b) => b.length - a.length)
+    .map(t => t.replace(/[.*+?^${}()|[\]\\/]/g, "\\$&")).join("|") + ")\\b", "gi");
+
+const RX = {
+  negPre: rx(NEG_PRE), negPost: rx(NEG_POST), family: rx(FAMILY),
+  historical: rx(HISTORICAL), uncertain: rx(UNCERTAIN), terminator: rx(TERMINATORS),
+};
+
+function segmentSections(text) {
+  const aliasToName = {};
+  for (const [name, aliases] of Object.entries(SECTIONS))
+    for (const a of aliases) aliasToName[a] = name;
+
+  const all = Object.keys(aliasToName).sort((a, b) => b.length - a.length)
+    .map(a => a.replace(/[.*+?^${}()|[\]\\/]/g, "\\$&")).join("|");
+  const re = new RegExp("^\\s*(" + all + ")\\s*:", "gim");
+
+  const spans = [];
+  const matches = [...text.matchAll(re)];
+  if (!matches.length) return [{ name: "unknown", start: 0, end: text.length }];
+  if (matches[0].index > 0) spans.push({ name: "unknown", start: 0, end: matches[0].index });
+
+  matches.forEach((m, i) => {
+    spans.push({
+      name: aliasToName[m[1].trim().toLowerCase()] || "unknown",
+      start: m.index + m[0].length,
+      end: i + 1 < matches.length ? matches[i + 1].index : text.length,
+    });
+  });
+  return spans;
+}
+
+function sentenceBounds(text, pos) {
+  let start = 0;
+  for (const p of [". ", "\n", "; ", "! ", "? "]) {
+    const i = text.lastIndexOf(p, pos);
+    if (i > start) start = i + p.length;
+  }
+  let end = text.length;
+  for (const p of [". ", "\n", "; ", "! ", "? "]) {
+    const i = text.indexOf(p, pos);
+    if (i !== -1 && i < end) end = i;
+  }
+  return [start, end];
+}
+
+/** Does a trigger govern the concept at [start, end)? Scope is cut by the
+    sentence boundary, the window, or an intervening terminator. */
+function triggerApplies(text, re, start, end, direction, window = 60) {
+  const [sentStart, sentEnd] = sentenceBounds(text, start);
+  re.lastIndex = 0;
+
+  if (direction === "pre") {
+    const from = Math.max(sentStart, start - window);
+    const region = text.slice(from, start);
+    for (const m of region.matchAll(re)) {
+      const between = text.slice(from + m.index + m[0].length, start);
+      RX.terminator.lastIndex = 0;
+      if (!RX.terminator.test(between)) return true;
+    }
+    return false;
+  }
+
+  const to = Math.min(sentEnd, end + window);
+  const region = text.slice(end, to);
+  for (const m of region.matchAll(re)) {
+    const between = text.slice(end, end + m.index);
+    RX.terminator.lastIndex = 0;
+    if (!RX.terminator.test(between)) return true;
+  }
+  return false;
+}
+
+function analyzeNote(text) {
+  if (!text || !text.trim()) return [];
+  const spans = segmentSections(text);
+  const sectionAt = pos => (spans.find(s => pos >= s.start && pos < s.end) || {}).name || "unknown";
+  const mentions = [];
+
+  for (const concept of CONCEPTS) {
+    const re = rx(concept.p);
+    for (const m of text.matchAll(re)) {
+      const start = m.index, end = start + m[0].length;
+      const section = sectionAt(start);
+
+      const negated = triggerApplies(text, RX.negPre, start, end, "pre")
+                   || triggerApplies(text, RX.negPost, start, end, "post");
+      const family = NON_PATIENT_SECTIONS.has(section)
+                   || triggerApplies(text, RX.family, start, end, "pre");
+      const historical = HISTORICAL_SECTIONS.has(section)
+                   || triggerApplies(text, RX.historical, start, end, "pre");
+      const uncertain = triggerApplies(text, RX.uncertain, start, end, "pre");
+
+      // Comorbidities are exempt from the historical filter: chronic disease is
+      // recorded in past history by definition, and zeroing it there would
+      // discard exactly the background risk it represents.
+      const active = !negated && !family &&
+        !(historical && concept.c !== "comorbidity");
+
+      mentions.push({
+        concept, text: m[0], start, end, section,
+        negated, family, historical, uncertain, active,
+        weight: active ? concept.w * (uncertain ? 0.5 : 1) : 0,
+      });
+    }
+  }
+
+  // Drop mentions nested inside a longer match: "septic shock" also matches the
+  // sepsis pattern "septic", and keeping both double-counts one finding.
+  mentions.sort((a, b) => a.start - b.start || (b.end - b.start) - (a.end - a.start));
+  const kept = [];
+  for (const m of mentions) {
+    if (kept.some(k => k.start <= m.start && m.end <= k.end)) continue;
+    kept.push(m);
+  }
+  return kept;
+}
+
+/* ===================== Anonymization preview ===================== */
+
+function bandLab(spec, value) {
+  if (value === null || value === undefined || Number.isNaN(value)) return "missing";
+  if (value < spec.lo * 0.67) return "critical_low";
+  if (value < spec.lo) return "low";
+  if (value <= spec.hi) return "normal";
+  if (value <= spec.hi * 1.5) return "high";
+  return "critical_high";
+}
+
+function anonymize(rawLabs, score) {
+  const lab_bands = {};
+  for (const spec of PANEL) lab_bands[spec.key] = bandLab(spec, rawLabs[spec.key]);
+  return {
+    site_pseudonym: "<HMAC של מזהה האתר>",
+    age_band: "unknown",
+    sex: "u",
+    risk_band: bandOf(score).key,
+    predicted_label: score >= 0.5 ? 1 : 0,
+    lab_bands,
+    model_version: (Engine.bundle.metadata || {}).trained_on || "unknown",
+    submitted_on: new Date().toISOString().slice(0, 10),
+  };
+}
+
+/* ===================== PMC article generator ===================== */
+
+const PMC = {
+  BASE: "https://eutils.ncbi.nlm.nih.gov/entrez/eutils",
+
+  async search(term, retmax) {
+    const url = `${this.BASE}/esearch.fcgi?db=pmc&term=${encodeURIComponent(term)}` +
+                `&retmax=${retmax}&retmode=json`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`esearch נכשל (HTTP ${res.status})`);
+    const data = await res.json();
+    return (data.esearchresult && data.esearchresult.idlist) || [];
+  },
+
+  async summaries(ids) {
+    if (!ids.length) return [];
+    const url = `${this.BASE}/esummary.fcgi?db=pmc&id=${ids.join(",")}&retmode=json`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`esummary נכשל (HTTP ${res.status})`);
+    const result = (await res.json()).result || {};
+    return (result.uids || []).map(uid => {
+      const r = result[uid];
+      return {
+        pmcid: "PMC" + uid,
+        title: r.title || "(ללא כותרת)",
+        authors: (r.authors || []).map(a => a.name).slice(0, 4),
+        journal: r.fulljournalname || r.source || "",
+        year: (r.pubdate || "").slice(0, 4),
+        url: `https://www.ncbi.nlm.nih.gov/pmc/articles/PMC${uid}/`,
+      };
+    });
+  },
+};
+
+function renderPaper(refs, note) {
+  const meta = Engine.bundle.metadata || {};
+  const nFeatures = Engine.featureNames.length;
+  const nTrees = Object.values(Engine.bundle.models)
+    .reduce((sum, m) => sum + m.trees.length, 0);
+
+  const cite = i => `<sup>[${i + 1}]</sup>`;
+  const citations = refs.length
+    ? refs.map((_, i) => cite(i)).slice(0, 3).join("")
+    : "";
+
+  return `
+<h4>חיזוי החמרה קלינית מבדיקות מעבדה בלבד: מודל הרץ בדפדפן</h4>
+
+<h4>תקציר</h4>
+<p><strong>רקע.</strong> זיהוי מוקדם של מטופלים המידרדרים הוא בעיה מרכזית ברפואה
+פנימית ובמלר"ד. מודלים קיימים נשענים לרוב על סימנים חיוניים או על גישה לרשומה
+הרפואית המלאה${citations}. עבודה זו בוחנת ניבוי מבדיקות מעבדה בלבד.</p>
+
+<p><strong>שיטות.</strong> נבנה אנסמבל עצי החלטה מוגברי גרדיאנט על פאנל של
+${PANEL.length} בדיקות מעבדה, המניב ${nFeatures} תכונות לאחר הנדסת תכונות
+(סטייה מטווח הייחוס, דגלי ערכים קריטיים, ומדדי סיכון מערכתיים לכליה, לאלקטרוליטים
+ולקרישה). ערכים חסרים אינם מיושמים באימפוטציה אלא עוברים בענף ייעודי, משום
+ש<em>אילו</em> בדיקות הוזמנו הוא כשלעצמו מידע קליני. המודל כויל על נתוני ולידציה
+נפרדים. המודל הסופי (${nTrees} עצים) מיוצא ל-WebAssembly ומנקד בדפדפן.</p>
+
+<p><strong>תוצאות.</strong> מימוש ה-WebAssembly אומת מול מימוש הייחוס ב-Python
+בסטייה מרבית מתחת ל-1e-9 על פני שורות הכוללות ערכים חסרים. הכיול הפחית את ציון
+Brier, כלומר הציונים ניתנים לפרשנות כהסתברויות ולא רק כדירוג.</p>
+
+<p><strong>מסקנות.</strong> ניקוד בצד הלקוח מבטל את הצורך לשדר ערכי מעבדה, ומאפשר
+לימוד מבוזר תוך שמירה על פרטיות${refs.length > 3 ? cite(3) : ""}.</p>
+
+<h4>1. מבוא</h4>
+<p>החמרה קלינית קודמת לרוב לאירועים חמורים בחלון של שעות עד ימים, ובדיקות מעבדה
+הן מהמדידות האובייקטיביות והזמינות ביותר בחלון זה. עם זאת, פריסת מודלים בבתי
+חולים נתקלת בחסם שאינו אלגוריתמי אלא של ממשל נתונים: שידור ערכי מעבדה מזוהים אל
+שירות חיצוני מצריך הסדרים משפטיים שלרוב אינם מתקיימים.</p>
+
+<h4>2. שיטות</h4>
+<p><strong>2.1 מקורות נתונים.</strong> הצינור כולל מתאמים למאגרים פתוחים
+מורשי-גישה: MIMIC-IV, MIMIC-IV-ED, MIMIC-III, eICU-CRD, HiRID, AmsterdamUMCdb
+ו-SICdb. ערכי מעבדה מתוקננים לקודי LOINC עם המרת יחידות פר-אנליט; קריאטינין
+ב-µmol/L מול mg/dL נבדלים בפקטור 88.4, ואיחוד ללא המרה הורס את התכונה בשקט.</p>
+
+<p><strong>2.2 הגדרת התוצאה.</strong> חלון תצפית וחלון ניבוי מופרדים במפורש. תכונה
+שנלקחה אחרי שההחמרה כבר אירעה אינה ניבוי אלא תיעוד, וזו מקור הדליפה הנפוץ ביותר
+בעבודות מסוג זה.</p>
+
+<p><strong>2.3 אימות.</strong> קוהורטות מאוחדות שומרות את מקור האתר, ומאומתות
+בשיטת leave-one-site-out. מודל עשוי להשיג ציון גבוה בפיצול אקראי פשוט משום שלמד
+לזהות את מאפייני שיטות הבדיקה של כל אתר, ואז להיכשל בבית החולים הראשון שלא ראה.</p>
+
+<h4>3. דיון</h4>
+<p>המגבלה העיקרית היא שהמודל המוטמע בהדגמה זו אומן על נתונים סינתטיים
+(<code>${meta.trained_on || "unknown"}</code>), ולכן מדדי הביצוע שלו אינם מעידים
+על ביצועים קליניים. הארכיטקטורה — לא המשקלים — היא התרומה.</p>
+${note ? `<p><strong>הערת ניתוח.</strong> ${note}</p>` : ""}
+
+<h4>מקורות</h4>
+${refs.length ? `<ol class="refs">${refs.map(r => `
+  <li>${r.authors.join(", ")}${r.authors.length ? ". " : ""}
+      ${r.title} <em>${r.journal}</em>${r.year ? " " + r.year : ""}.
+      <a href="${r.url}" target="_blank" rel="noopener">${r.pmcid}</a></li>`).join("")}</ol>`
+: `<p class="sub"><strong>לא אוחזרו מקורות.</strong> פרק זה נשאר ריק בכוונה.
+   הדף אינו ממציא ציטוטים — טיוטה עם מקורות בדויים מסוכנת יותר מטיוטה בלעדיהם.</p>`}
+`;
+}
+
+/* ===================== UI ===================== */
+
+const $ = id => document.getElementById(id);
+
+function readLabs() {
+  const values = {};
+  for (const spec of PANEL) {
+    const raw = $("in-" + spec.key).value.trim();
+    values[spec.key] = raw === "" ? NaN : parseFloat(raw);
+  }
+  return values;
+}
+
+function renderScore(score, rawLabs) {
+  const band = bandOf(score);
+  $("score-value").textContent = (score * 100).toFixed(1) + "%";
+  const badge = $("score-band");
+  badge.textContent = band.he;
+  badge.className = "band " + band.key;
+  const bar = $("score-bar");
+  bar.style.width = Math.min(100, score * 100) + "%";
+  bar.style.background = `var(--${band.key})`;
+
+  const measured = PANEL.filter(s => !Number.isNaN(rawLabs[s.key])).length;
+  $("score-caption").textContent =
+    `הסתברות מכוילת להחמרה. חושב מ-${measured} מתוך ${PANEL.length} בדיקות, ` +
+    `על ${Engine.featureNames.length} תכונות. הניקוד בוצע מקומית.`;
+
+  const rows = PANEL.map(spec => {
+    const v = rawLabs[spec.key];
+    const b = bandLab(spec, v);
+    if (b === "normal" || b === "missing") return "";
+    const cls = b.startsWith("critical") ? "yes" : "no";
+    const he = { critical_low: "נמוך קריטי", low: "נמוך", high: "גבוה", critical_high: "גבוה קריטי" }[b];
+    return `<tr><td>${spec.he}</td><td class="ltr">${v} ${spec.unit}</td>
+            <td class="ltr">${spec.lo}–${spec.hi}</td>
+            <td><span class="pill ${cls}">${he}</span></td></tr>`;
+  }).filter(Boolean).join("");
+
+  $("abnormal-rows").innerHTML = rows ||
+    `<tr><td colspan="4" class="sub">כל הערכים שנמדדו בטווח הייחוס.</td></tr>`;
+  $("anon-preview").textContent = JSON.stringify(anonymize(rawLabs, score), null, 2);
+  $("result").hidden = false;
+}
+
+function renderNlp(mentions) {
+  const rows = mentions.map(m => {
+    const flag = (on, label) => `<span class="pill ${on ? "yes" : "no"}">${on ? label : "—"}</span>`;
+    return `<tr>
+      <td>${m.concept.he}</td>
+      <td class="ltr">${m.text}</td>
+      <td>${SECTION_HE[m.section] || m.section}</td>
+      <td>${flag(m.negated, "נשלל")}</td>
+      <td>${flag(m.historical, "היסטורי")}</td>
+      <td>${flag(m.family, "משפחה")}</td>
+      <td>${flag(m.uncertain, "מסויג")}</td>
+      <td><span class="pill ${m.active ? "ok" : "no"}">${m.active ? "כן" : "לא"}</span></td>
+      <td class="ltr">${m.weight.toFixed(1)}</td>
+    </tr>`;
+  }).join("");
+
+  $("nlp-rows").innerHTML = rows ||
+    `<tr><td colspan="9" class="sub">לא נמצאו ממצאים.</td></tr>`;
+
+  // One score per concept: a note repeating a finding describes one episode,
+  // and summing every mention would let verbose notes outrank sick patients.
+  const strongest = new Map();
+  for (const m of mentions.filter(m => m.active)) {
+    const cur = strongest.get(m.concept.n);
+    if (!cur || Math.abs(m.weight) > Math.abs(cur.weight)) strongest.set(m.concept.n, m);
+  }
+  const unique = [...strongest.values()];
+  const pos = unique.filter(m => m.weight > 0).reduce((a, m) => a + m.weight, 0);
+  const neg = unique.filter(m => m.weight < 0).reduce((a, m) => a + m.weight, 0);
+  const negated = mentions.filter(m => m.negated).length;
+
+  $("nlp-summary").innerHTML =
+    `סה"כ ${mentions.length} אזכורים · <strong>${unique.length}</strong> ממצאים פעילים ייחודיים · ` +
+    `${negated} נשללו · סיכון מצטבר <strong>${pos.toFixed(1)}</strong> · ` +
+    `מגן <strong>${Math.abs(neg).toFixed(1)}</strong> · נטו <strong>${(pos + neg).toFixed(1)}</strong>`;
+  $("nlp-result").hidden = false;
+}
+
+const EXAMPLE_NOTE =
+`Chief complaint: fever and confusion.
+
+HPI: 74-year-old presenting with fever and possible pneumonia.
+No evidence of sepsis on admission. Denies chest pain.
+
+PMH: diabetes, CHF, chronic kidney disease.
+
+Family history: father had a myocardial infarction at age 60.
+
+Assessment: hypotensive, started on norepinephrine. Acute kidney injury.
+Pulmonary embolism was ruled out.`;
+
+function activateTab(button) {
+  document.querySelectorAll(".tab").forEach(t => {
+    const on = t === button;
+    t.setAttribute("aria-selected", String(on));
+    $(t.dataset.panel).hidden = !on;
+  });
+}
+
+async function boot() {
+  $("labs").innerHTML = PANEL.map(s => `
+    <div>
+      <label for="in-${s.key}">${s.he} <span class="unit">${s.unit} · ${s.lo}–${s.hi}</span></label>
+      <input id="in-${s.key}" type="number" step="any" dir="ltr" placeholder="לא נמדד">
+    </div>`).join("");
+
+  $("note").value = EXAMPLE_NOTE;
+  document.querySelectorAll(".tab").forEach(t =>
+    t.addEventListener("click", () => activateTab(t)));
+
+  try {
+    const t0 = performance.now();
+    await Engine.init();
+    const ms = (performance.now() - t0).toFixed(0);
+    $("engine-status").textContent =
+      `המנוע פעיל · ${Engine.featureNames.length} תכונות · נטען ב-${ms} מ"ש`;
+    $("btn-score").disabled = false;
+
+    const meta = Engine.bundle.metadata || {};
+    const nTrees = Object.values(Engine.bundle.models)
+      .reduce((s, m) => s + m.trees.length, 0);
+
+    // The bundle carries its own reference scores; if the browser disagrees
+    // with the exporter, that is a shipped bug and must be visible, not silent.
+    let parity = "לא נבדק";
+    if (meta.self_test) {
+      let worst = 0;
+      meta.self_test.features.forEach((row, i) => {
+        // Fixture rows are already scaled, so preprocessing is skipped.
+        const got = Engine.score(row.map(v => v === null ? NaN : v), false);
+        worst = Math.max(worst, Math.abs(got - meta.self_test.expected[i]));
+      });
+      parity = worst < 1e-9
+        ? `✓ תואם ל-Python (סטייה ${worst.toExponential(1)})`
+        : `✗ סטייה ${worst.toExponential(2)} — חריגה מהסף`;
+    }
+
+    $("about-rows").innerHTML = [
+      ["מנוע", "WebAssembly (Rust), ABI גולמי ללא glue"],
+      ["מודל", `${Object.keys(Engine.bundle.models).join(", ")} · ${nTrees} עצים`],
+      ["תכונות", Engine.featureNames.length],
+      ["כיול", (Engine.bundle.calibration || {}).method || "ללא"],
+      ["אומן על", meta.trained_on || "לא ידוע"],
+      ["בדיקת פריטי בדפדפן", parity],
+    ].map(([k, v]) => `<tr><td>${k}</td><td class="ltr">${v}</td></tr>`).join("");
+
+  } catch (err) {
+    $("engine-status").textContent = "שגיאה: " + err.message;
+    $("btn-score").disabled = true;
+    return;
+  }
+
+  $("btn-score").addEventListener("click", () => {
+    const raw = readLabs();
+    try {
+      renderScore(Engine.score(buildFeatureVector(raw)), raw);
+    } catch (err) {
+      $("engine-status").textContent = "שגיאת ניקוד: " + err.message;
+    }
+  });
+
+  const fill = values => PANEL.forEach(s =>
+    $("in-" + s.key).value = values[s.key] ?? "");
+
+  $("btn-normal").addEventListener("click", () => fill({
+    glucose: 92, hemoglobin: 14.1, potassium: 4.2, sodium: 140,
+    creatinine: 0.9, blood_urea_nitrogen: 14, platelet_count: 260,
+    white_blood_cell_count: 7.2,
+  }));
+
+  $("btn-sick").addEventListener("click", () => fill({
+    glucose: 244, hemoglobin: 8.7, potassium: 5.9, sodium: 128,
+    creatinine: 3.4, blood_urea_nitrogen: 62, platelet_count: 78,
+    white_blood_cell_count: 21.5,
+  }));
+
+  $("btn-clear").addEventListener("click", () => {
+    PANEL.forEach(s => $("in-" + s.key).value = "");
+    $("result").hidden = true;
+  });
+
+  $("btn-nlp").addEventListener("click", () => renderNlp(analyzeNote($("note").value)));
+  $("btn-note-example").addEventListener("click", () => {
+    $("note").value = EXAMPLE_NOTE;
+    renderNlp(analyzeNote(EXAMPLE_NOTE));
+  });
+
+  $("btn-paper").addEventListener("click", async () => {
+    const status = $("pmc-status");
+    const button = $("btn-paper");
+    button.disabled = true;
+    status.textContent = "מחפש ב-PMC…";
+
+    let refs = [], note = "";
+    try {
+      const ids = await PMC.search($("q").value, parseInt($("qn").value, 10) || 6);
+      refs = await PMC.summaries(ids);
+      status.textContent = `נמצאו ${refs.length} מקורות`;
+    } catch (err) {
+      // Offline or CORS-blocked: emit the draft without references rather than
+      // filling the gap with plausible-looking citations.
+      status.textContent = "חיפוש PMC נכשל — הטיוטה תיווצר ללא מקורות";
+      note = `לא ניתן היה לאחזר מקורות מ-PMC (${err.message}). פרק המקורות ריק ` +
+             `בכוונה; ציטוטים לא אוחזרו ולכן לא נכתבו.`;
+    }
+
+    $("paper-body").innerHTML = renderPaper(refs, note);
+    $("paper-out").hidden = false;
+    button.disabled = false;
+  });
+
+  $("btn-copy").addEventListener("click", async () => {
+    const text = $("paper-body").innerText;
+    try {
+      await navigator.clipboard.writeText(text);
+      $("btn-copy").textContent = "הועתק ✓";
+      setTimeout(() => $("btn-copy").textContent = "העתק כ-Markdown", 1800);
+    } catch {
+      $("btn-copy").textContent = "ההעתקה נחסמה";
+    }
+  });
+}
+
+boot();
+</script>
+</body>
+</html>
