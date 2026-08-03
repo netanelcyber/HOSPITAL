@@ -1,0 +1,59 @@
+# Two-host fuzzing lab for an AUTHORIZED copy of Chameleon (קמיליון).
+#
+#   host 1  "target"  -> runs the Chameleon copy (you provide the image/build)
+#   host 2  "fuzzer"  -> sends fuzzing at the target
+#
+# The two share an INTERNAL-ONLY network with no route to the internet or to any
+# production/hospital system. This is a lab for a non-production copy ONLY.
+#
+# Bring up:   docker compose up -d
+# Shell into fuzzer:  docker compose exec fuzzer bash
+# Tear down:  docker compose down            (revert to a clean state each run)
+
+services:
+  target:
+    # ---------------------------------------------------------------------
+    # REPLACE this with your authorized Chameleon copy. Two common options:
+    #   1) build from the source you were given:   build: ./target
+    #   2) run a provided image:                    image: your-registry/chameleon:lab
+    # The Dockerfile in ./target is a PLACEHOLDER that just documents the ports.
+    # ---------------------------------------------------------------------
+    build: ./target
+    container_name: chameleon-target
+    hostname: chameleon.lab.internal
+    networks:
+      labnet:
+        aliases: [chameleon.lab.internal]
+    # Expose ONLY to the internal labnet (no "ports:" host mapping = not published
+    # to your machine or the outside). Typical Chameleon surfaces:
+    expose:
+      - "80"     # web app / HTTP API
+      - "443"    # https
+      - "2575"   # HL7 v2 MLLP listener   (adjust to your instance)
+      - "11112"  # DICOM SCP              (adjust to your instance)
+    # Crash-friendly: allow core dumps for parser crashes on the target.
+    ulimits:
+      core: -1
+    security_opt:
+      - seccomp:unconfined     # lets ASAN/core capture work in-container (lab only)
+    restart: "no"              # a crash should STAY down so the fuzzer records it
+
+  fuzzer:
+    build: ./fuzzer
+    container_name: chameleon-fuzzer
+    depends_on: [target]
+    networks: [labnet]
+    volumes:
+      - ./campaigns:/work/campaigns   # harness configs & specs you drop in
+      - ./crashes:/work/crashes       # crashes land here for triage
+    working_dir: /work
+    # Keep it alive so you can exec in and launch campaigns interactively.
+    command: ["sleep", "infinity"]
+    cap_add:
+      - SYS_PTRACE                    # debugger / crash triage inside the fuzzer
+
+networks:
+  labnet:
+    driver: bridge
+    internal: true    # <-- NO internet access. Remove ONLY if a tool needs it,
+                      #     and never attach this lab to a production network.
