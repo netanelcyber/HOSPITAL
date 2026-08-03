@@ -1,0 +1,146 @@
+# Patient Deterioration Prediction System Configuration
+
+# Data Settings
+data:
+  train_size: 0.7
+  val_size: 0.15
+  test_size: 0.15
+  random_state: 42
+
+# Lab Features Configuration
+lab_features:
+  enabled: true
+  features:
+    - glucose
+    - hemoglobin
+    - potassium
+    - sodium
+    - creatinine
+    - blood_urea_nitrogen
+    - alanine_aminotransferase
+    - aspartate_aminotransferase
+    - alkaline_phosphatase
+    - bilirubin
+    - albumin
+    - prothrombin_time
+    - partial_thromboplastin_time
+    - platelet_count
+    - white_blood_cell_count
+    - red_blood_cell_count
+    - hematocrit
+  # Normalization parameters (mean, std)
+  normalization: z_score  # or 'minmax'
+  handle_missing: mean    # or 'forward_fill', 'drop'
+
+# Clinical Features (Medical Reports)
+clinical_features:
+  enabled: true
+  use_text_embedding: true
+  embedding_model: distilbert-base-uncased
+  # Can also use auxiliary clinical indicators:
+  include_vitals: true
+  include_comorbidities: true
+
+# Model Settings
+model:
+  type: ensemble  # ensemble, xgboost, lightgbm
+  ensemble_models:
+    - xgboost
+    - lightgbm
+  ensemble_method: voting  # voting, stacking
+  ensemble_weights:
+    xgboost: 0.6
+    lightgbm: 0.4
+
+# XGBoost Parameters
+xgboost:
+  n_estimators: 200
+  max_depth: 6
+  learning_rate: 0.05
+  subsample: 0.8
+  colsample_bytree: 0.8
+  min_child_weight: 1
+  gamma: 0
+  reg_alpha: 0.1
+  reg_lambda: 1.0
+  scale_pos_weight: auto  # auto-calculated based on class imbalance
+  objective: binary:logistic
+  eval_metric: auc
+
+# LightGBM Parameters
+lightgbm:
+  n_estimators: 200
+  max_depth: 6
+  learning_rate: 0.05
+  num_leaves: 31
+  feature_fraction: 0.8
+  bagging_fraction: 0.8
+  bagging_freq: 5
+  min_child_samples: 20
+  objective: binary
+  metric: auc
+  boosting_type: gbdt
+
+# Training Settings
+training:
+  epochs: 100
+  batch_size: 32
+  early_stopping_rounds: 20
+  validation_fraction: 0.1
+  # Class imbalance handling
+  handle_class_imbalance: true
+  imbalance_method: smote  # smote, class_weight, threshold_optimization
+
+# Hyperparameter Tuning
+tuning:
+  method: optuna  # optuna, random_search, grid_search
+  n_trials: 100
+  cv_folds: 5
+  scoring: roc_auc
+
+# Calibration Settings
+calibration:
+  enabled: true
+  method: isotonic  # isotonic, platt_scaling
+
+# Feature Selection
+feature_selection:
+  enabled: true
+  method: mutual_information  # mutual_information, permutation
+  n_features: auto  # auto or integer
+
+# Explainability
+explainability:
+  enabled: true
+  shap_method: tree_explainer
+  plot_summary: true
+  plot_dependence: true
+
+# Paths
+paths:
+  data_raw: data/raw
+  data_processed: data/processed
+  models: models
+  logs: logs
+  results: results
+
+# Logging
+logging:
+  level: INFO
+  format: '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+
+# API Settings
+api:
+  host: 0.0.0.0
+  port: 8000
+  workers: 4
+  reload: false
+  log_level: info
+  cors_origins:
+    - "*"
+
+# Risk Thresholds
+risk_thresholds:
+  low: 0.30
+  medium: 0.50
+  high: 0.70

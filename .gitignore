@@ -1,0 +1,20 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# Datasets and derived artifacts are never committed: MIMIC/eICU are
+# credentialed data and redistribution violates the DUA.
+data/raw/
+data/processed/
+*.csv
+*.csv.gz
+*.parquet
+
+models/*.pkl
+wasm/model_bundle.json
+wasm/target/
+logs/
+results/
+.pytest_cache/
