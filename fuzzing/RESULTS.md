@@ -149,10 +149,30 @@ for memory unsafety. Result: no ASan error — only a **timeout** (a ~1 MB strea
 very slowly in `read_unary_code`, a CPU-DoS/hang class). **No memory corruption.**
 
 ### Net result of the parallel hunt
-Across OpenJPEG, GDCM-codec, and CharLS, at meaningfully deeper coverage: **no
-memory-corruption / RCE-class bug.** Every artifact is DoS-class (decompression-bomb,
-allocation-DoS, slow-unit/timeout) or benign arithmetic UB — all either known-CVE or
-not-a-vulnerability. This is a solid negative result, honestly reported. Nothing disclosed.
+OpenJPEG and CharLS: no memory-corruption (only DoS-class artifacts + benign arithmetic UB).
+
+**GDCM codec path — one genuine memory-safety bug found.** Once the J2K-encapsulated-DICOM
+seeds drove mutations into `gdcm::JPEG2000Codec`, the fuzzer produced a **reproducible ASan
+heap-buffer-overflow (out-of-bounds READ, CWE-125) in GDCM's JPEG2000 header/marker parser**
+(`parsej2k_imp` / `read16`, reached via `ImageReader` on a malformed encapsulated JPEG2000
+codestream). Two independent inputs trigger it; confirmed on GDCM v3.0.24.
+
+Severity is Medium (an OOB **read** → heap info-leak / crash, not a demonstrated write/RCE).
+
+**Novelty is PLAUSIBLE but unconfirmed.** The known GDCM OOB-read CVEs are in *other* codecs
+(`RAWCodec`, `RLECodec`, `JPEGBITSCodec`) and in the JPEG2000 *decode* path
+(`DecodeByStreamsCommon`, CVE-2024-22391) — none matched this *header-parser* site in searches.
+That is suggestive, not proof.
+
+**Responsible-disclosure hold:** the full technical writeup, root cause, and the reproducer are
+**kept local and NOT committed** to this (possibly public) repo — same principle as never
+committing crash inputs. They will move only through coordinated disclosure (GDCM maintainer
+historically unresponsive → CERT/CC + CISA), and only after dedup against GDCM's tracker and
+Cisco Talos's advisory queue confirms it is not already reported. Nothing has been disclosed
+or published yet.
+
+Also observed (lower value, DoS-class): four GDCM front-end aborts (uncaught exception on
+malformed file-meta / data elements) — robustness issues, not memory corruption.
 
 ## Nothing was disclosed
 No report was sent to any vendor or CERT. No crash input is committed. The only

@@ -10,7 +10,7 @@ you don't own.
 |---|---|---|---|---|---|
 | 1 | **B04** | OpenJPEG JPEG2000 decode — memory corruption | ~9.8 (RCE) | ✅ fuzzing | **Ran. Clean** (30s, 0 crashes, seedless). Unverified, keep hunting. |
 | 2 | **B05** | CharLS JPEG-LS decode — memory corruption | ~9.8 (RCE) | ✅ fuzzing | **Ran deep (ASan-only).** No memory corruption. Only benign signed-overflow UB + a slow-unit/timeout (CPU-DoS). Likely known (OSS-Fuzz). Not reportable. |
-| 2b | **B04-via-DICOM** | GDCM JPEG2000 **codec wrapper** (encapsulated DICOM) | ~8–9 (RCE) | ✅ fuzzing | **Ran deep.** Built 36 J2K-encapsulated-DICOM seeds → codec reached (cov 15.9k). No codec corruption; only front-end alloc-DoS OOMs. |
+| 2b | **B04-via-DICOM** | GDCM JPEG2000 **codec wrapper** (encapsulated DICOM) | ~8–9 (RCE) | ✅ fuzzing | **Ran deep → FOUND a genuine ASan heap OOB-READ (CWE-125)** in GDCM's JPEG2000 header parser (`parsej2k_imp`), reproducible on v3.0.24. Severity Medium (read/info-leak, not RCE). **Novelty plausible, unconfirmed** — details+repro held PRIVATE pending dedup + coordinated disclosure (CERT/CC + CISA). |
 | 3 | **B06** | RT-STRUCT / waveform parse (GDCM/DCMTK) — memory corruption | ~8–9 | ✅ fuzzing (needs RT seeds) | Reachable via the GDCM harness with RT-STRUCT seeds; not yet seeded. Pending. |
 | 4 | **B07** | Encapsulated-PDF-in-DICOM parse — memory corruption | ~7–8 | ✅ fuzzing (needs PDF-DICOM seeds) | Same GDCM harness, needs seeds. Pending. |
 | 5 | **B04/GDCM** | GDCM allocation-DoS (parser front-end) | 7.5 (DoS) | ✅ fuzzing | **Ran. Found** 163 B → 4.29 GB (`ByteValue::SetLength`). **KNOWN = CVE-2026-3650.** Duplicate, not reported. |
