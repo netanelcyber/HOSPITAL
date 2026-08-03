@@ -20,6 +20,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y --no-install-recommends \
         clang \
         llvm \
+        libclang-rt-18-dev \
         cmake \
         ninja-build \
         make \
@@ -27,6 +28,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         ca-certificates \
         python3 \
     && rm -rf /var/lib/apt/lists/*
+# libclang-rt-18-dev provides the compiler-rt static libs (libclang_rt.asan-*.a)
+# that -fsanitize=address,fuzzer link against; `clang` alone does not ship them
+# on Ubuntu 24.04. If you change the base image's clang major version, match the
+# libclang-rt-<N>-dev version to it.
 
 # --- Pinned upstream versions -------------------------------------------------
 # Change these to the current release tags before a hunt, then rebuild.

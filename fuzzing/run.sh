@@ -40,11 +40,21 @@ mkdir -p "${CORPUS_DIR}" "${CRASH_DIR}"
 export ASAN_OPTIONS="${ASAN_OPTIONS:-abort_on_error=1:allocator_may_return_null=1:detect_leaks=0}"
 export UBSAN_OPTIONS="${UBSAN_OPTIONS:-print_stacktrace=1:halt_on_error=1}"
 
+# Single-allocation ceiling. GDCM's DICOM parser eagerly allocates from an
+# unvalidated element-length field, so it trivially OOMs on a huge advertised
+# length (a KNOWN allocation-DoS class, e.g. CVE-2026-3650). Capping malloc lets
+# libFuzzer flag that quickly and keep hunting for real memory-corruption instead
+# of dying on the first OOM. Set MALLOC_LIMIT_MB=0 to disable.
+MALLOC_LIMIT_MB="${MALLOC_LIMIT_MB:-512}"
+malloc_arg=()
+[ "${MALLOC_LIMIT_MB}" != "0" ] && malloc_arg=(-malloc_limit_mb="${MALLOC_LIMIT_MB}")
+
 echo "==> Fuzzing '${target}'  (crashes -> ${CRASH_DIR})"
 exec "${bin}" \
     -artifact_prefix="${CRASH_DIR}/" \
     -print_final_stats=1 \
     -timeout=25 \
     -rss_limit_mb=2048 \
+    "${malloc_arg[@]}" \
     "$@" \
     "${CORPUS_DIR}"

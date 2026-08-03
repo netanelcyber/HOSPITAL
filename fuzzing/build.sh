@@ -18,8 +18,16 @@ CXX="${CXX:-clang++}"
 
 # fuzzer-no-link: instrument the libraries for coverage but don't pull in the
 # libFuzzer main() (only the final harness link gets -fsanitize=fuzzer).
-LIB_FLAGS="-g -O1 -fno-omit-frame-pointer -fsanitize=fuzzer-no-link,address,undefined"
-BIN_FLAGS="-g -O1 -fno-omit-frame-pointer -fsanitize=fuzzer,address,undefined"
+#
+# -fno-sanitize=function: OpenJPEG (and GDCM) call through generic function
+# pointers by design (opaque-handle C API). UBSan's function-pointer *type*
+# check flags that idiom as a false positive that has nothing to do with memory
+# safety, so we disable just that one check — matching how OSS-Fuzz fuzzes these
+# projects. ASan + the rest of UBSan still catch real corruption.
+SAN="address,undefined"
+NOSAN="-fno-sanitize=function"
+LIB_FLAGS="-g -O1 -fno-omit-frame-pointer -fsanitize=fuzzer-no-link,${SAN} ${NOSAN}"
+BIN_FLAGS="-g -O1 -fno-omit-frame-pointer -fsanitize=fuzzer,${SAN} ${NOSAN}"
 
 mkdir -p "${BUILD_DIR}" "${OUT_DIR}"
 

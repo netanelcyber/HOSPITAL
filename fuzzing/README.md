@@ -37,6 +37,23 @@ docker run --rm -it -v "$PWD/fuzzing/out:/work/out" biofuzz
 cat out/versions.txt   # exact pinned SHAs for the disclosure "version tested" field
 ```
 
+## ⚠️ Seeds matter more than anything (read before a real hunt)
+
+A first live run (see `RESULTS.md`) confirmed the pipeline works but reached the
+JPEG2000 **decode** path only shallowly, because **no JPEG2000 seed corpus was
+present** — shallow clones omit the upstream test-image submodules. Without J2K
+seeds:
+- the OpenJPEG harness fuzzes from scratch (weak deep-codec coverage), and
+- the GDCM harness mostly exercises the DICOM **parser front-end** (where a
+  *known* allocation-DoS lives, CVE-2026-3650) rather than `gdcm::JPEG2000Codec`.
+
+Before a serious hunt, populate `corpus/` with real J2K:
+```bash
+# full clones (not --depth 1) pull the test-data submodules; or generate:
+opj_compress -i input.pnm -o seed.j2k
+gdcmconv --j2k input.dcm seed_j2k.dcm      # J2K-encapsulated DICOM for the GDCM harness
+```
+
 ## Bumping to the pinned-latest before a real hunt
 
 A crash only counts if it reproduces on the **current** release (otherwise it may be an
