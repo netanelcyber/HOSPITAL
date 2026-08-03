@@ -15,7 +15,31 @@
 
 ---
 
-## 🟠 C-1 — Open redirect in `safe_redirect_url` (CWE-601)
+## ✅ C-1 — Open redirect in `safe_redirect_url` (CWE-601) — **CONFIRMED**
+
+> **Status update (validated in local sandbox, no live target):** promoted from
+> 🟠 candidate to ✅ **confirmed**. All three layers were proven with Ruby 3.3.6
+> and the project-pinned Rails 8.1.3.1. See "Validation results" below. A
+> disclosure-ready write-up is in
+> [`camaleon-2.9.2-C1-open-redirect-advisory.md`](./camaleon-2.9.2-C1-open-redirect-advisory.md).
+
+### Validation results
+
+| Layer | Test | Result |
+|---|---|---|
+| 1. Camaleon guard | `safe_redirect_url("https:/evil.com")` (exact repro) | **Passes** — returns the string; `URI.parse` host is `nil`, so the off-host check is skipped |
+| 2. Rails guard | real `redirect_to` on actionpack **8.1.3.1** | **Passes** — emits `Location: https:/evil.com`, HTTP 302, **no** `UnsafeRedirectError` (Rails allows it because `URI(url).host` is `nil`) |
+| 3. Client | WHATWG URL normalization (curl; same as Chrome/Firefox/Safari for special schemes) | **Navigates off-site** — `https:/evil.com` → `https://evil.com/` |
+
+Working payloads: `https:/evil.com` and `https:///evil.com`. (`https:evil.com`
+stays opaque and is **not** a reliable vector; `javascript:`/`data:` are passed by
+Camaleon but browsers don't execute them from a `Location` header.)
+
+My earlier ~30% estimate assumed Rails' `allow_other_host` would blunt this. It
+does **not** — the `nil`-host case defeats both Camaleon's and Rails' checks. The
+two guards share the same blind spot.
+
+
 
 **Location:** `app/helpers/camaleon_cms/session_helper.rb:177`
 **Reachability:** pre-auth. `GET /admin/login?return_to=<payload>` → the value is
