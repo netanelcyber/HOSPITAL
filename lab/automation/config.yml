@@ -1,0 +1,46 @@
+# Chameleon fuzzing orchestrator — configuration (LAB COPY ONLY).
+# Point this at your isolated lab instance. The orchestrator refuses to start
+# unless the safety block below passes (see fuzz_orchestrator.py preflight).
+
+safety:
+  # You must set this to true to attest the target is a non-production lab copy.
+  lab_confirmed: false
+  # Hostnames explicitly permitted (in addition to private/loopback IPs).
+  allow_hosts:
+    - chameleon.lab.internal
+    - localhost
+    - 127.0.0.1
+  # Substrings that mark a host as production -> hard refuse if matched.
+  deny_host_markers:
+    - prod
+    - ichilov
+    - sourasky
+    - .gov.il
+    - .health
+
+target_host: chameleon.lab.internal
+# Command used to bring the target back after a crash (all surfaces).
+restart_cmd: "docker compose -f ../docker-compose.yml restart target"
+monitor_interval_sec: 2
+
+# Continuous loop: rotate through every enabled surface that has its inputs.
+surfaces:
+  hl7:
+    enabled: true
+    port: 2575
+    iterations_per_round: 300
+    # boofuzz variant is optional/heavier; black-box script is the default.
+  api:
+    enabled: true
+    # Required input; if missing the surface is skipped with a logged notice.
+    spec: ""            # e.g. ./inputs/openapi.json  (or a live URL)
+    base_url: "http://chameleon.lab.internal"
+    max_examples: 500
+  parser:
+    enabled: true
+    # Black-box binary fuzzing (no source): AFL++ QEMU-mode over the client binary.
+    target_bin: ""      # e.g. ./inputs/chameleon_import_parser
+    seed_corpus: ""     # e.g. ./inputs/corpus
+    afl_timeout_sec: 600
+
+out_dir: ./out

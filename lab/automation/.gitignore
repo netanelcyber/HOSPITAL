@@ -1,0 +1,5 @@
+out/
+.stop
+*.log
+__pycache__/
+*.pyc

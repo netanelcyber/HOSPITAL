@@ -1,0 +1,17 @@
+# Negative test: a production-looking target. The safety preflight MUST refuse
+# to start with this config (exit code 2), even though lab_confirmed is true.
+safety:
+  lab_confirmed: true
+  allow_hosts: [chameleon.lab.internal]
+  deny_host_markers: [prod, ichilov, sourasky, .gov.il, .health]
+
+target_host: chameleon.prod.ichilov.health   # matches deny markers
+restart_cmd: ""
+monitor_interval_sec: 2
+
+surfaces:
+  hl7: { enabled: true, port: 2575, iterations_per_round: 10 }
+  api: { enabled: false }
+  parser: { enabled: false }
+
+out_dir: ./out

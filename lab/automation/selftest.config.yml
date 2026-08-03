@@ -1,0 +1,27 @@
+# Self-test config: validates the orchestrator end-to-end against the mock
+# (lab/campaigns/selftest_mock_mllp.py) with NO real target. Loopback host.
+safety:
+  lab_confirmed: true
+  allow_hosts: [localhost, 127.0.0.1]
+  deny_host_markers: [prod, ichilov, sourasky, .gov.il, .health]
+
+target_host: 127.0.0.1
+# Restart brings the crash-on-oversized-field mock back up.
+restart_cmd: "python3 ../campaigns/selftest_mock_mllp.py"
+monitor_interval_sec: 1
+
+surfaces:
+  hl7:
+    enabled: true
+    port: 2575
+    iterations_per_round: 25
+  api:
+    enabled: true       # no spec -> must be SKIPPED (tests skip logic)
+    spec: ""
+    base_url: "http://127.0.0.1"
+  parser:
+    enabled: true       # no target_bin -> must be SKIPPED
+    target_bin: ""
+    seed_corpus: ""
+
+out_dir: ./out
