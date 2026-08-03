@@ -13,3 +13,6 @@
 - [תבנית דיווח חולשה — Disclosure Report Template](docs/disclosure-report-template.md) —
   טיוטה מוכנה למילוי לפתיחת advisory פרטי (Title/Version/CWE/Description/Impact/Reproduction/Fix),
   עם דוגמה מלאה ו-checklist טרם הגשה. ללא exploit; דורשת אימות עצמאי לפני שליחה.
+- [`fuzzing/`](fuzzing/README.md) — סביבת fuzzing מבודדת (Docker) לאימות **SUSP-BIO-04** (נתיב פענוח
+  JPEG2000 ב-OpenJPEG/GDCM) תחת ASan/UBSan. מטרתה להפוך את ההשערה לממצא מאומת **לפני** כל דיווח.
+  לא שולחת דבר ולא מפרסמת PoC; קלטי crash אינם נשמרים ב-git.

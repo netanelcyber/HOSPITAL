@@ -1,0 +1,14 @@
+# Never commit build artifacts, corpora growth, or crash reproducers.
+# Crash inputs are potential exploit primitives — they go only into a private
+# disclosure to the right coordinator, never into git.
+build/
+out/
+crashes/
+artifacts/
+*.o
+*.a
+*.log
+# Keep the seed corpus directory but ignore anything the fuzzer adds to it.
+corpus/*
+!corpus/.gitkeep
+!corpus/README.md
