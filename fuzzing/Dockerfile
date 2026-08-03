@@ -37,20 +37,23 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Change these to the current release tags before a hunt, then rebuild.
 ARG OPENJPEG_TAG=v2.5.3
 ARG GDCM_TAG=v3.0.24
+ARG CHARLS_TAG=2.4.2
 
 WORKDIR /src
 RUN git clone --depth 1 --branch ${OPENJPEG_TAG} https://github.com/uclouvain/openjpeg.git openjpeg \
- && git clone --depth 1 --branch ${GDCM_TAG}     https://github.com/malaterre/GDCM.git gdcm
+ && git clone --depth 1 --branch ${GDCM_TAG}     https://github.com/malaterre/GDCM.git gdcm \
+ && git clone --depth 1 --branch ${CHARLS_TAG}   https://github.com/team-charls/charls.git charls
 
 # Record the exact resolved commit SHAs — needed to prove a crash is on the
 # pinned-latest code (i.e. not an already-fixed bug) in the disclosure report.
 RUN mkdir -p /work/out \
  && echo "openjpeg ${OPENJPEG_TAG} $(git -C /src/openjpeg rev-parse HEAD)" >  /work/out/versions.txt \
- && echo "gdcm     ${GDCM_TAG} $(git -C /src/gdcm rev-parse HEAD)"          >> /work/out/versions.txt
+ && echo "gdcm     ${GDCM_TAG} $(git -C /src/gdcm rev-parse HEAD)"          >> /work/out/versions.txt \
+ && echo "charls   ${CHARLS_TAG} $(git -C /src/charls rev-parse HEAD)"      >> /work/out/versions.txt
 
 WORKDIR /work
 COPY build.sh run.sh triage.sh /work/
-COPY harness_openjpeg.c harness_gdcm.cxx /work/
+COPY harness_openjpeg.c harness_gdcm.cxx harness_charls.cxx /work/
 COPY corpus /work/corpus
 RUN chmod +x /work/*.sh
 

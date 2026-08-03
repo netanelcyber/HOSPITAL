@@ -35,6 +35,7 @@ fi
 case "${target}" in
     openjpeg) bin="${OUT_DIR}/fuzz_openjpeg" ;;
     gdcm)     bin="${OUT_DIR}/fuzz_gdcm" ;;
+    charls)   bin="${OUT_DIR}/fuzz_charls" ;;
     *) echo "error: unknown target '${target}'" >&2; exit 2 ;;
 esac
 [ -x "${bin}" ] || { echo "error: ${bin} not built" >&2; exit 1; }
@@ -66,6 +67,7 @@ set -e
 # --- classify owning component from the top frames ---------------------------
 component="unknown"
 if grep -Eiq 'openjp2|opj_|/openjpeg/' "${san_log}"; then component="OpenJPEG"; fi
+if grep -Eiq 'charls::|/charls/|libcharls' "${san_log}"; then component="CharLS"; fi
 if grep -Eiq 'gdcm::|/gdcm/|libgdcm' "${san_log}"; then
     # If both appear, the GDCM frame nearer the top usually indicates the wrapper.
     if [ "${component}" = "OpenJPEG" ]; then component="OpenJPEG (via GDCM wrapper)"; else component="GDCM"; fi

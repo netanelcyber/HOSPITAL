@@ -58,6 +58,28 @@ The JPEG2000 *decode* path was barely exercised, for a concrete reason:
 - Short wall-clock (seconds–minutes). Real memory-corruption hunting on a mature
   codec needs a **good J2K seed corpus + hours-to-days** of coverage-guided fuzzing.
 
+### 5. CharLS / JPEG-LS (SUSP-BIO-05): signed-overflow, low impact, likely known ⚠️
+Added `harness_charls.cxx` and ran it against CharLS `2.4.2` with its 29 shipped
+`.jls` conformance seeds. It hit a **UBSan signed-integer-overflow (CWE-190)**:
+
+```
+default_traits.hpp:168  dequantize(int):  error_value * (2*near_lossless+1)  overflows int
+  compute_reconstructed_sample
+  scan_decoder_core::decode_run_interruption_pixel   (JPEG-LS run mode)
+  ... jpegls_decoder::decode()
+```
+
+This is genuine, reachable decode-path UB (not a harness artifact). **But:**
+- It is **signed-overflow UB, not memory corruption** — no ASan heap error. The
+  overflowed value flows into `fix_reconstructed_value`, which clamps to a valid
+  sample, so the likely effect is a wrong pixel, not an OOB access. Probable
+  severity: **low** (CVSS low / possibly non-security).
+- CharLS is on **OSS-Fuzz** with an active maintainer, so this is **plausibly
+  already known**. Must be deduped against CharLS issues/OSS-Fuzz before any contact.
+
+Per the CVSS-priority rule this does **not** jump the queue — it is not the
+RCE-class bug the memory-corruption hunt targets. Not reported.
+
 ## To actually pursue SUSP-BIO-04 next
 
 1. **Get real seeds** (the single biggest lever): full (non-shallow) OpenJPEG/GDCM

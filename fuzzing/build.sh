@@ -87,11 +87,35 @@ echo "==> Linking harness_gdcm"
     -Wl,--start-group "${GDCM_LIBS[@]}" -Wl,--end-group \
     -o "${OUT_DIR}/fuzz_gdcm"
 
+echo "==> Building CharLS (static, instrumented)  [SUSP-BIO-05: JPEG-LS]"
+cmake -S "${SRC_DIR}/charls" -B "${BUILD_DIR}/charls" -G Ninja \
+    -DCMAKE_BUILD_TYPE=Debug \
+    -DBUILD_SHARED_LIBS=OFF \
+    -DCHARLS_BUILD_TESTS=OFF \
+    -DCHARLS_BUILD_SAMPLES=OFF \
+    -DCHARLS_BUILD_FUZZ_TEST=OFF \
+    -DCMAKE_C_COMPILER="${CC}" \
+    -DCMAKE_CXX_COMPILER="${CXX}" \
+    -DCMAKE_C_FLAGS="${LIB_FLAGS}" \
+    -DCMAKE_CXX_FLAGS="${LIB_FLAGS}"
+cmake --build "${BUILD_DIR}/charls" -j"$(nproc)"
+
+CHARLS_LIB="$(find "${BUILD_DIR}/charls" -name 'libcharls.a' | head -n1)"
+
+echo "==> Linking harness_charls"
+"${CXX}" ${BIN_FLAGS} \
+    -I"${SRC_DIR}/charls/include" \
+    "${WORK_DIR}/harness_charls.cxx" \
+    "${CHARLS_LIB}" \
+    -o "${OUT_DIR}/fuzz_charls"
+
 echo "==> Seeding corpus from upstream test images (if present)"
 mkdir -p "${WORK_DIR}/corpus"
 find "${SRC_DIR}/openjpeg" -type f \( -name '*.j2k' -o -name '*.jp2' \) \
     -exec cp -n {} "${WORK_DIR}/corpus/" \; 2>/dev/null || true
 find "${SRC_DIR}/gdcm" -type f -name '*.dcm' \
+    -exec cp -n {} "${WORK_DIR}/corpus/" \; 2>/dev/null || true
+find "${SRC_DIR}/charls" -type f -name '*.jls' \
     -exec cp -n {} "${WORK_DIR}/corpus/" \; 2>/dev/null || true
 
 echo "==> Build complete. Binaries in ${OUT_DIR}:"

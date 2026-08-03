@@ -23,8 +23,9 @@ shift || true
 case "${target}" in
     openjpeg) bin="${OUT_DIR}/fuzz_openjpeg" ;;
     gdcm)     bin="${OUT_DIR}/fuzz_gdcm" ;;
+    charls)   bin="${OUT_DIR}/fuzz_charls" ;;
     *)
-        echo "usage: $0 {openjpeg|gdcm} [libFuzzer args]" >&2
+        echo "usage: $0 {openjpeg|gdcm|charls} [libFuzzer args]" >&2
         exit 2
         ;;
 esac
