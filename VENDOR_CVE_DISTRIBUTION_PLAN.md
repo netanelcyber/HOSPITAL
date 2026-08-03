@@ -10,9 +10,10 @@
 
 | Vendor | Product | Priority | CVE Type | Contact Email | Timeline | Status |
 |--------|---------|----------|----------|---------------|----------|--------|
-| **Orthanc** | Orthanc Server | 🔴 CRITICAL | Novel J2K + TS validation | security@orthanc-server.com | 90 days | Ready to send |
-| **Philips** | HealthSuite Imaging | 🟠 HIGH | Pattern-based investigation | security@philips.com | 90 days | Awaiting authorization |
-| **Siemens** | syngo suite | 🟠 HIGH | Pattern-based investigation | security@siemens-healthineers.com | 90 days | Awaiting authorization |
+| **Orthanc** | Orthanc Server | 🔴 CRITICAL | Novel J2K + TS validation | security@orthanc-server.com | 90 days | ✅ SENT |
+| **Philips** | HealthSuite Imaging | 🟠 HIGH | Pattern-based investigation | security@philips.com | 90 days | ✅ SENT |
+| **Siemens** | syngo suite | 🟠 HIGH | Pattern-based investigation | security@siemens-healthineers.com | 90 days | ✅ SENT |
+| **Carestream** | Vue PACS | 🟠 HIGH | Pattern-based investigation | security@carestream.com | 90 days | Ready to send |
 
 ---
 
@@ -109,6 +110,14 @@ Best regards,
 
 **What**: Pattern-based analysis with focus on CVE-2021-45465 verification  
 **File**: `/home/user/HOSPITAL/SIEMENS_CVE_REPORT.md`  
+**Status**: ✅ SENT
+
+---
+
+### 1.4 Carestream - Send Investigation Recommendation
+
+**What**: Pattern-based analysis of Vue PACS vulnerabilities  
+**File**: `/home/user/HOSPITAL/CARESTREAM_CVE_REPORT.md`  
 **Status**: ✅ Ready to send (informational)
 
 **Email Template**:
@@ -419,6 +428,64 @@ Best regards,
 
 ---
 Report attached: SIEMENS_CVE_REPORT.md
+```
+
+### Template 4: Carestream Investigation Recommendation
+
+```
+Subject: Security Assessment Recommendation: Vue PACS JPEG2000 Handling
+
+To: security@carestream.com
+
+Dear Carestream Product Security Team,
+
+Following vulnerabilities in related PACS systems (Orthanc CVE-2026-5437+, Philips 
+CVE-2023-40159), I recommend proactive security audit of Carestream Vue PACS products.
+
+RECOMMENDED ASSESSMENT AREAS:
+
+1. JPEG2000 Codestream Validation
+   - Detection of truncated/malformed streams
+   - SOC/EOC marker validation
+   - Codestream length verification before use
+
+2. Transfer Syntax UID Verification
+   - Mismatch detection between declared TS and actual encoding
+   - Impact on downstream DICOM processing
+
+3. CVE-2023-40159 Patch Verification
+   - Confirm fix is comprehensive across all Vue PACS versions
+   - Test with deserialization edge cases
+
+4. DICOM Metadata Bounds Checking
+   - VR field length validation
+   - Out-of-bounds protection in codec library integration
+   - Recursion depth limits in sequences
+
+PROPOSED COLLABORATION:
+
+If Carestream would like to engage in authorized security assessment, I can:
+1. Provide test DICOM corpus with known vulnerabilities
+2. Conduct penetration testing on staging environments
+3. Document findings in vendor-ready format
+4. Follow responsible disclosure best practices
+
+This proactive approach allows identification and patching before public awareness.
+
+Please advise if Carestream is interested in:
+a) Internal security audit recommendation
+b) Authorized third-party penetration testing
+c) Coordinated vulnerability assessment
+d) No action at this time
+
+I am available to discuss further.
+
+Best regards,
+[Your Name]
+[Your Email]
+
+---
+Report attached: CARESTREAM_CVE_REPORT.md
 ```
 
 ---
