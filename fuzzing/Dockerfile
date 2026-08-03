@@ -4,7 +4,12 @@
 # control and runs locally — no live system is touched. See README.md.
 #
 # Build:  docker build -t biofuzz fuzzing/
-# Run:    docker run --rm -it -v "$PWD/fuzzing/out:/work/out" biofuzz
+# Run:    docker run --rm -it biofuzz
+#         (Do NOT bind-mount over /work/out — it masks the built fuzz_* binaries
+#          and versions.txt. To persist a campaign, mount per-target dirs only,
+#          e.g. -v "$PWD/fuzzing/persist/corpus_openjpeg:/work/corpus_openjpeg"
+#          -v "$PWD/fuzzing/persist/crashes_openjpeg:/work/crashes_openjpeg".
+#          See README.md "Quick start".)
 #
 # Pin the exact upstream tags here so results are reproducible and so the
 # "version tested" field of any disclosure report is unambiguous. Bump these

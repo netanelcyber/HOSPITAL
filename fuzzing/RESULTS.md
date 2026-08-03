@@ -23,7 +23,9 @@ First OpenJPEG run aborted immediately on `-fsanitize=function`
 (function-pointer *type* mismatch in OpenJPEG's opaque-handle C API). This is a
 **known false-positive class**, not memory unsafety. Fix: build with
 `-fno-sanitize=function` (now the default in `build.sh`), matching OSS-Fuzz.
-After the fix, OpenJPEG ran clean.
+After the fix, OpenJPEG ran without that false-positive abort (no ASan
+memory-corruption failure was observed in the runs that followed — not a proof
+of absence).
 
 ### 3. One GDCM allocation-DoS — real behavior, but NOT novel ⚠️
 The GDCM harness hit an out-of-memory on a **163-byte** input:

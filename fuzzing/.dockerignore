@@ -1,0 +1,15 @@
+# Keep fuzzing artifacts out of the Docker build context. None of these are
+# COPYied into an image layer, but without this file `docker build fuzzing/`
+# ships them to the daemon/remote builder on every rebuild — the grown corpus
+# can be ~100 MB, and crash reproducers are private exploit primitives that must
+# never leave the host. Mirror of .gitignore's runtime-artifact patterns.
+persist/
+crashes/
+crashes_*/
+corpus_*/
+out/
+build/
+artifacts/
+*.log
+*.o
+*.a
