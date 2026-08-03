@@ -123,3 +123,51 @@ Then scan the output to verify the tag was rewritten:
 ```bash
 python3 dicom_ts_scan.py ./out --csv verify.csv
 ```
+
+## dicom_upload_server.py
+
+HTTP server that accepts DICOM file uploads and returns a Transfer Syntax report as JSON.
+
+### Usage
+
+```bash
+python3 dicom_upload_server.py --host 127.0.0.1 --port 8765
+```
+
+Then POST multipart form data with DICOM files:
+
+```bash
+curl -F "file=@study.dcm" http://127.0.0.1:8765/upload | jq .
+```
+
+Response:
+
+```json
+{
+  "summary": {
+    "files": 1,
+    "total_bytes": 472,
+    "skipped_non_dicom": 0,
+    "errors": 0,
+    "by_transfer_syntax": {
+      "1.2.840.10008.1.2.4.90": 1
+    },
+    "by_family": {
+      "jpeg2000": 1
+    }
+  },
+  "files": [
+    {
+      "transfer_syntax_uid": "1.2.840.10008.1.2.4.90",
+      "transfer_syntax_name": "JPEG 2000 Image Compression (Lossless Only)",
+      "family": "jpeg2000",
+      "modality": "CT",
+      "manufacturer": "ACME Imaging",
+      "rows": "512",
+      "columns": "512",
+      "bits_allocated": "16",
+      "size_bytes": 472
+    }
+  ]
+}
+```
