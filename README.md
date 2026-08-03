@@ -1,102 +1,245 @@
-# Patient Deterioration Prediction System
+# PenuX-II
 
-תוכנה לחיזוי התדרדרות מצב של מטופלים על בסיס בדיקות מעבדה עם שימוש בדוחות רפואיים כמידע סיוע.
+Prediction of clinical deterioration from **laboratory results**, using free-text
+medical reports as an **auxiliary channel only**.
 
-##개요 (Overview)
+The lab panel is the primary signal. Clinical notes contribute context — negated
+findings, comorbidity burden, triage acuity — but the model is built so that it
+still predicts when no note exists.
 
-מערכת ML לחיזוי התדרדרות מצב מטופלים באמצעות:
-- **Primary Feature**: תוצאות בדיקות מעבדה (חומצות חיזור, אלקטרוליטים, נוספים)
-- **Auxiliary Data**: דוחות רפואיים (הערות קליניות, היסטוריה רפואית)
+---
 
-## תיקייה הבנייה (Project Structure)
-
-```
-HOSPITAL/
-├── data/                          # ניהול נתונים
-│   ├── raw/                       # נתונים גולמיים
-│   ├── processed/                 # נתונים מעובדים
-│   └── loaders.py                 # טוענות נתונים
-├── features/                      # הנדסת תכונות
-│   ├── lab_features.py            # תכונות בדיקות מעבדה
-│   └── clinical_features.py       # תכונות מדוחות קליניים
-├── models/                        # מודלי ML
-│   ├── ensemble.py                # מודל אנסמבל
-│   ├── gradient_boosting.py       # Gradient Boosting
-│   └── calibration.py             # כיול הסתברויות
-├── training/                      # הדרכה
-│   ├── pipeline.py                # צינור הדרכה
-│   ├── validation.py              # ולידציה וערכון
-│   └── hyperparameter_tuning.py   # כיוונון פרמטרים
-├── inference/                     # הסקה
-│   ├── predictor.py               # מנבא הסקה
-│   └── explainer.py               # הסברים (SHAP)
-├── api/                           # API ווב
-│   ├── app.py                     # אפליקציית FastAPI
-│   └── schemas.py                 # סכימות הנתונים
-├── tests/                         # בדיקות
-│   ├── test_features.py
-│   ├── test_models.py
-│   └── test_api.py
-├── notebooks/                     # ניוטבוק למחקר
-│   └── exploratory_analysis.ipynb
-├── requirements.txt               # תלויות
-├── config.yaml                    # הגדרות
-└── README.md                      # זה הקובץ
+## Architecture
 
 ```
+                    ┌──────────────────────────────────────┐
+   open datasets ──▶│  data/       cohort construction     │
+   (MIMIC, eICU,    │              labelling, windows      │
+    HiRID, NCBI)    └──────────────┬───────────────────────┘
+                                   │
+                    ┌──────────────▼───────────────────────┐
+                    │  features/   LOINC harmonization     │
+                    │              lab engineering         │
+                    │              clinical NLP (ConText)  │
+                    └──────────────┬───────────────────────┘
+                                   │
+                    ┌──────────────▼───────────────────────┐
+                    │  models/     GBDT ensemble           │
+                    │              probability calibration │
+                    └──────────────┬───────────────────────┘
+                                   │  export
+                    ┌──────────────▼───────────────────────┐
+                    │  wasm/       browser-side scoring    │
+                    │              labs never leave client │
+                    └──────────────┬───────────────────────┘
+                                   │  generalized only
+                    ┌──────────────▼───────────────────────┐
+                    │  api/        k-anonymity gate        │
+                    │              differential privacy    │
+                    └──────────────────────────────────────┘
+```
 
-## התקנה (Installation)
+---
+
+## Data sources
+
+Adapters normalize each source into one cohort schema. All are
+**credentialed-access**: obtain them from PhysioNet under their DUA. Nothing is
+downloaded automatically and no patient data is committed.
+
+| Source | Stays | Setting |
+|---|---|---|
+| MIMIC-IV (hosp) | ~546,000 | Ward / internal medicine |
+| MIMIC-IV-ED | ~425,000 | Emergency department |
+| eICU-CRD | ~200,000 | 208 US hospitals |
+| MIMIC-III | ~58,000 | ICU |
+| HiRID | ~33,000 | ICU, Bern |
+| AmsterdamUMCdb | ~23,000 | ICU, Amsterdam |
+| SICdb | ~27,000 | ICU, Salzburg |
+
+```python
+from data.public_datasets import MultiSourceCohortBuilder, DeteriorationLabelConfig
+
+cohort = (
+    MultiSourceCohortBuilder(DeteriorationLabelConfig(
+        observation_hours=24, prediction_horizon_hours=48,
+    ))
+    .add("mimic-iv", "/data/mimiciv")
+    .add("eicu", "/data/eicu")
+    .build()
+)
+```
+
+MIMIC-IV's `labevents` is ~130M rows and is streamed in chunks rather than
+loaded whole. Pooled cohorts keep a `source` column, because a model can score
+well on a shuffled split by learning each site's assay quirks and then fail at
+the first hospital it has not seen:
+
+```python
+pipeline.leave_one_site_out(cohort)
+```
+
+**NCBI** (`data/ncbi.py`) supplies GEO critical-illness cohorts with outcome
+annotation for external validation, and MeSH entry terms for expanding the NLP
+lexicon. GEO series are transcriptomic — they are validation cohorts, not a
+substitute for the lab panel.
+
+---
+
+## LOINC harmonization
+
+Every source names analytes differently: MIMIC uses numeric itemids, eICU free
+text, AmsterdamUMCdb Dutch. All are mapped onto LOINC codes with per-analyte
+unit conversion. Creatinine in µmol/L against mg/dL differs by a factor of
+88.4; pooling them unconverted destroys the feature silently.
+
+Values outside physiologically possible ranges are blanked as transcription
+errors rather than kept as extreme patients.
+
+---
+
+## Clinical NLP
+
+Keyword counting inverts the signal on clinical prose, because most of what a
+note says about a finding is that it is *absent*. `features/clinical_nlp.py`
+implements NegEx/ConText and resolves, per mention:
+
+- **polarity** — "no evidence of sepsis" is not sepsis
+- **experiencer** — "father had an MI" is not the patient
+- **temporality** — "history of CHF" is not the current presentation
+- **uncertainty** — "possible pneumonia" counts at half weight
+
+Comorbidities are exempt from the temporality filter: chronic disease is
+recorded in past history by definition, and zeroing it there discards exactly
+the background risk it represents.
+
+Every score is auditable per mention:
+
+```python
+featurizer.explain(note)
+```
+```
+              concept          matched_text              section  negated  historical  family  active  weight
+            infection                 fever      chief_complaint    False       False   False    True     1.5
+               sepsis                sepsis                  hpi     True       False   False   False     0.0
+             diabetes              diabetes past_medical_history    False        True   False    True     1.0
+myocardial_infarction myocardial infarction       family_history    False       False    True   False     0.0
+          hypotension           hypotensive           assessment    False       False   False    True     3.0
+```
+
+Contextual embeddings use Bio_ClinicalBERT, pre-trained on clinical notes so
+that abbreviations like "s/p" and "w/o" tokenize meaningfully. Falls back to
+TF-IDF + SVD when transformers is unavailable.
+
+---
+
+## Distributed WASM inference
+
+Patient labs are the most sensitive data a hospital holds, and the safest
+request is the one never sent. The trained model exports to a flat tree bundle
+that scores **in the browser**; lab values never leave the client.
+
+```python
+from inference.wasm_export import export_bundle, score_bundle
+
+bundle = export_bundle(result.ensemble, result.lab_extractor, result.calibrator)
+```
+
+`score_bundle` is a NumPy reference implementation kept solely to diff against
+the Rust/WASM path. An exported model that scores differently in the browser
+than in training is the failure this format exists to prevent, and it is
+invisible without a reference. Current agreement: **2.8e-17**.
+
+The bundle contains constants only — no code — so a corrupted bundle can wreck
+a prediction but cannot execute anything.
+
+---
+
+## Anonymized distributed storage
+
+The server is treated as honest-but-curious with breachable storage. It is
+built so it *cannot* re-identify, not so it promises not to look.
+
+1. **Client-side reduction.** The browser submits risk bands and coarsened lab
+   bins — never raw values, identifiers, notes, or sub-day timestamps.
+   Anonymizing server-side would be theatre; the raw data would already have
+   crossed the network.
+2. **k-anonymity.** Records stage until k others share their quasi-identifier
+   signature. A record unique in age band × sex × lab pattern is
+   re-identifiable however few fields it carries.
+3. **Differential privacy.** Aggregate counts carry Laplace noise against a
+   finite epsilon budget. Noise alone is not privacy — an attacker who asks
+   1000 times averages it away — so an exhausted budget stops answering rather
+   than degrading quietly.
+
+Direct identifiers are not silently dropped; their presence is a protocol
+violation and rejects the submission, because a client sending them has a bug
+that would otherwise keep leaking.
+
+---
+
+## Evaluation
+
+Rare-outcome prediction makes ROC-AUC flattering, so the reported metrics lead
+with average precision and alert-burden recall — a deterioration alert is only
+adopted if the ward can absorb its volume.
+
+```
+roc_auc                      average_precision
+brier_raw                    brier_calibrated
+recall_at_5pct_alerts        precision_at_5pct_alerts
+recall_at_10pct_alerts       precision_at_10pct_alerts
+```
+
+Calibration is fitted on held-out validation data. A model optimized for
+ranking produces scores that separate classes but are not probabilities, and
+thresholds are set on calibrated risk.
+
+---
+
+## UpToDate
+
+UpToDate is licensed content whose terms prohibit automated retrieval and
+derivative use. Nothing here ingests it or trains on it.
+`features/clinical_reference.py` provides link-out only: given a flagged
+concept, it returns a deep link a clinician can open. Content stays on Wolters
+Kluwer's side; only the URL crosses. API calls require the hospital's own
+credentials and are disabled by default.
+
+---
+
+## Usage
 
 ```bash
 pip install -r requirements.txt
 ```
 
-## שימוש (Usage)
-
-### הדרכה
 ```python
 from training.pipeline import TrainingPipeline
 
-pipeline = TrainingPipeline(config_path='config.yaml')
-pipeline.train()
+pipeline = TrainingPipeline(use_clinical_nlp=True, harmonize_units=True)
+result = pipeline.train(cohort, groups=cohort["patient_id"])
+
+print(result.metrics)
+print(result.feature_importance.head(10))
 ```
 
-### חיזוי
-```python
-from inference.predictor import PatientDeteriorationPredictor
+Grouped splitting is used when `groups` is supplied — the same patient in train
+and test lets the model recognize them rather than generalize.
 
-predictor = PatientDeteriorationPredictor(model_path='models/best_model.pkl')
-risk_score = predictor.predict(lab_tests, medical_report)
-```
+---
 
-### API
-```bash
-python api/app.py
-```
+## Status
 
-ייגש ל-http://localhost:8000/docs לתיעוד API
+Implemented and verified: data adapters, LOINC harmonization, clinical NLP,
+ensemble, calibration, WASM bundle export (exact against Python), privacy layer.
 
-## תכונות עיקריות
+Not yet built: the Rust/WASM crate itself, the FastAPI ingest service, and the
+test suite.
 
-- ✅ חיזוי כושר על בסיס בדיקות מעבדה בלבד
-- ✅ שימוש בדוחות רפואיים כמידע סיוע
-- ✅ הסברות מנבא (SHAP)
-- ✅ API REST למודל
-- ✅ ולידציה כלונית ובדיקות
-- ✅ כיול הסתברויות
-- ✅ ניהול מודלים וורסיוני
+---
 
-## דרישות
+## Clinical use
 
-- Python 3.9+
-- scikit-learn
-- xgboost
-- shap
-- fastapi
-- pydantic
-- pandas
-- numpy
-
-## מחבר
-
-Hospital ML Team
+This is research software. It is not a medical device, has not been
+prospectively validated, and must not be used to make treatment decisions.
