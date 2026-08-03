@@ -24,12 +24,13 @@ Keep it: **vulnerability class + component + one-line impact**. Maintainers tria
 ### Version
 ```
 Product:        OpenEMR
-Version tested: <<e.g. 7.0.3 (patch 4)>>        ← exact, from Administration → About
-Commit / tag:   <<e.g. v7_0_3 @ <short-sha>>>   ← if you built from source
+Version tested: <<8.2.0 (released 2026-07-08 — current stable)>>   ← exact, from Administration → About
+Also repro on:  <<master @ <short-sha>>>        ← proves NOT already fixed
+Commit / tag:   <<e.g. v8_2_0 @ <short-sha>>>   ← if you built from source
 Install type:   <<Docker image tag / distro package / source build>>
 Environment:    <<PHP version, DB engine+version, OS>>
 ```
-State the **latest version you confirmed it on**. If it reproduces on `master`, say so — that rules out "already fixed."
+**Always test against the current stable (8.2.0) or `master`.** As of Aug 2026 the newest release is **8.2.0** (2026-07-08); the 2026 access-control/SQLi/XSS clusters were fixed across **8.0.0** (2026-02-11) and **8.0.0.3** (2026-03-25). If your finding only reproduces on ≤8.0.x it is likely **already fixed** — check the 8.1.0/8.2.0 release notes and closed GHSAs before filing, or it's a duplicate.
 
 ---
 
