@@ -44,8 +44,11 @@ if [ ! -x "${bin}" ]; then
 fi
 
 mkdir -p "${CORPUS_DIR}" "${CRASH_DIR}"
-# One-time seeding from the baked-in seeds (no-clobber; keeps growth per-target).
-if [ -d "${SEED_DIR}" ] && [ -z "$(ls -A "${CORPUS_DIR}" 2>/dev/null)" ]; then
+# Merge the shared seed set into the per-target corpus on EVERY launch, no-clobber
+# (-n): existing grown units are preserved, while seeds ADDED to corpus/ after an
+# earlier campaign still reach the target. (An empty-only check would strand new
+# seeds once the target corpus had any grown units.)
+if [ -d "${SEED_DIR}" ]; then
     cp -an "${SEED_DIR}/." "${CORPUS_DIR}/" 2>/dev/null || true
 fi
 

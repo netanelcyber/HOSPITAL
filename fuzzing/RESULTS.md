@@ -4,11 +4,16 @@
 **Environment:** Ubuntu 24.04, clang 18.1.3, libFuzzer + ASan + UBSan, 4 cores.
 **Pinned targets:** OpenJPEG `v2.5.3` (`210a8a5`), GDCM `v3.0.24` (`2eaae20`).
 
-> **Bottom line:** the harness works end-to-end, but **no novel vulnerability was
-> confirmed**. SUSP-BIO-04 (memory-corruption / RCE in the JPEG2000 decode path)
-> is **still unverified** — not disproven, just not reproduced in short runs. One
-> signal appeared (a GDCM allocation-DoS) but it matches an **already-known CVE
-> class**, so nothing here is reportable. Honest status: keep hunting, don't disclose.
+> **Bottom line:** the harness works end-to-end. The deep parallel run (see
+> "Parallel deepening") **found one genuine memory-safety bug** — a reproducible
+> ASan **heap OOB read (CWE-125) in GDCM's JPEG2000 header parser `parsej2k_imp`**,
+> confirmed on v3.0.24 **and master**, Medium severity (crash; heap info-leak
+> unconfirmed; not RCE). **Novelty is plausible but NOT confirmed** — it matches no
+> known CVE in searches but needs dedup against embargoed reports before disclosure;
+> held private. Separately, a GDCM **allocation-DoS** reproduced but matches the
+> already-known CVE-2026-3650 (duplicate). No **RCE** was demonstrated; OpenJPEG and
+> CharLS showed no ASan memory-corruption in the recorded runs. Status: one finding
+> in coordinated-disclosure prep, keep hunting, nothing disclosed yet.
 
 ## What actually happened
 
@@ -160,7 +165,8 @@ either the arithmetic is fixed or it is analyzed under a recovering UBSan config
 safely clamped. It is likely already known (OSS-Fuzz), but "known" ≠ "safe".
 
 ### Net result of the parallel hunt
-OpenJPEG and CharLS: no memory-corruption (only DoS-class artifacts + benign arithmetic UB).
+OpenJPEG and CharLS: no ASan memory-corruption in the recorded runs (DoS-class artifacts, plus
+the CharLS signed-overflow arithmetic UB that remains **unresolved** — see above; not "benign").
 
 **GDCM codec path — one genuine memory-safety bug found.** Once the J2K-encapsulated-DICOM
 seeds drove mutations into `gdcm::JPEG2000Codec`, the fuzzer produced a **reproducible ASan
