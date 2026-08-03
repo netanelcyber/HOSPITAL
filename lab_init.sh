@@ -18,7 +18,7 @@ echo ""
 
 # 2. Start Orthanc
 echo "🗂️  Starting Orthanc PACS..."
-docker-compose up -d
+docker compose up -d
 sleep 3
 if curl -s http://localhost:8042/api/system > /dev/null; then
     echo "   ✓ Orthanc running at http://localhost:8042"
