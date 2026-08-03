@@ -106,9 +106,25 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
     if (opj_setup_decoder(codec, &params) &&
         opj_read_header(stream, codec, &image) &&
         image) {
-        /* Full decode is where most parsing/allocation bugs surface. */
-        if (opj_decode(codec, stream, image)) {
-            opj_end_decompress(codec, stream);
+        /*
+         * Dimension guard: skip decoding absurdly large images. A malformed
+         * header can advertise width*height*components in the billions, making
+         * OpenJPEG request multi-GB buffers (opj_j2k_update_image_data) — the
+         * known JPEG2000 decompression-bomb DoS, not memory corruption. Left
+         * unguarded it just OOM-kills the fuzzer and starves the DECODE logic
+         * (where real OOB/UAF live) of cycles. Cap total samples at 64M (~a
+         * 8Kx8K RGB frame) so the fuzzer spends time in the codec, not the
+         * allocator. Mirrors OSS-Fuzz's OpenJPEG harness.
+         */
+        unsigned long long w = (unsigned long long)(image->x1 - image->x0);
+        unsigned long long h = (unsigned long long)(image->y1 - image->y0);
+        unsigned long long samples = w * h * (unsigned long long)image->numcomps;
+        if (image->x1 > image->x0 && image->y1 > image->y0 &&
+            samples <= 64ULL * 1024ULL * 1024ULL) {
+            /* Full decode is where most parsing/OOB bugs surface. */
+            if (opj_decode(codec, stream, image)) {
+                opj_end_decompress(codec, stream);
+            }
         }
     }
 

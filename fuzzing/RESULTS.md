@@ -95,6 +95,33 @@ RCE-class bug the memory-corruption hunt targets. Not reported.
    minimization and is **not** already a known CVE becomes a real finding → then, and
    only then, the disclosure workflow in `../docs/`.
 
+## Deeper run (seeded + guarded, value-profile)
+
+Follow-up to go deeper on the top-CVSS target (OpenJPEG, B04):
+
+1. **Real corpus.** Built `opj_compress` and generated 72 valid J2K/JP2 seeds from
+   21 synthetic PNM images (8/16-bit, gray/RGB, varied sizes; tiled, multi-resolution,
+   lossless, progression orders). Coverage went **1,106 → 14,147 edges (~13×)**; a
+   30-min run grew the corpus to **2,887 units / 94 MB**.
+
+2. **OOM triage — benign, known class.** Every crash artifact was an OOM or slow-unit,
+   never memory corruption. Representative OOM: `malloc(5.57 GB)` at
+   `opj_j2k_update_image_data` (j2k.c:10395) — a buffer sized from attacker-controlled
+   `width*height*components`. The full size is requested (no integer-overflow-to-small),
+   so it is the **known JPEG2000 decompression-bomb DoS**, not an exploitable primitive.
+
+3. **Harness dimension guard (real improvement).** Those OOMs were killing workers and
+   starving the decode logic. Added a post-`read_header` guard in `harness_openjpeg.c`
+   that skips images whose `w*h*components` exceeds 64M samples (mirrors OSS-Fuzz). Effect:
+   workers stop dying on bombs and **exec/s rose ~38 → ~341 (≈9×)**, so the fuzzer now
+   spends its time in the codec (where OOB/UAF would surface), not the allocator.
+
+4. **Deeper campaign** relaunched with the guard, the grown corpus, `-use_value_profile=1`,
+   and no malloc-abort. Result recorded in this file when it completes.
+
+Status so far: still **no memory-corruption** in OpenJPEG — only the known allocation-DoS
+class. That is a legitimate (negative) result at this coverage depth, not a confirmed bug.
+
 ## Nothing was disclosed
 No report was sent to any vendor or CERT. No crash input is committed. The only
 outputs are this summary and the tooling.
