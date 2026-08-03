@@ -165,9 +165,9 @@ curl -X POST \
 ## מידע התקשרות
 
 **דוח זה ניתן על ידי:**
-- שם: [Your Name]
+- שם: נתי שטרן (Nati Stern)
 - אימייל: nsh531@gmail.com
-- ארגון: [Your Organization]
+- ארגון: DICOM Security Research Lab
 
 **כל תשובות לחתירה עם התחייבות:**
 - ודאות הנתונים של החולים
@@ -227,4 +227,6 @@ curl -X POST \
 **סיווג**: דיווח אבטחה מסווג  
 **מצב**: מוכן לשליחה
 
-**צור קשר:** nsh531@gmail.com
+**צור קשר:**  
+נתי שטרן (Nati Stern)  
+nsh531@gmail.com
