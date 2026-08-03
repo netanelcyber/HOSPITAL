@@ -3,11 +3,21 @@
 # disclosure to the right coordinator, never into git.
 build/
 out/
-crashes/
 artifacts/
 *.o
 *.a
 *.log
+# Crash reproducers: cover the base dir AND the per-target dirs run.sh writes
+# (crashes_openjpeg/ etc.) AND the documented host-persist tree, at any depth,
+# so a stray `git add .` can never publish an exploit primitive.
+crashes/
+crashes_*/
+**/crashes/
+**/crashes_*/
+persist/
+# Per-target grown corpora (run.sh writes coverage mutations here).
+corpus_*/
+**/corpus_*/
 # Keep the seed corpus directory but ignore anything the fuzzer adds to it.
 corpus/*
 !corpus/.gitkeep

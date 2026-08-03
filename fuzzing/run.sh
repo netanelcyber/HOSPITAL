@@ -14,7 +14,7 @@ set -euo pipefail
 
 WORK_DIR="${WORK_DIR:-/work}"
 OUT_DIR="${WORK_DIR}/out"
-CORPUS_DIR="${WORK_DIR}/corpus"
+SEED_DIR="${WORK_DIR}/corpus"   # shared read-only seed set (mixed formats)
 
 target="${1:-}"
 shift || true
@@ -32,6 +32,11 @@ esac
 # Per-target crash dir so concurrently-fuzzed targets don't share a prefix —
 # an artifact's owning harness must stay unambiguous for replay/triage.
 CRASH_DIR="${WORK_DIR}/crashes_${target}"
+# Per-target corpus so libFuzzer's coverage-interesting mutations grow into a
+# dir private to this harness — otherwise each target pollutes the others'
+# corpus with incompatible J2K/DICOM/JPEG-LS units and wastes startup rescanning
+# them. Seed it once from the shared seed set (SEED_DIR is treated read-only).
+CORPUS_DIR="${WORK_DIR}/corpus_${target}"
 
 if [ ! -x "${bin}" ]; then
     echo "error: ${bin} not built. Run ./build.sh first." >&2
@@ -39,6 +44,10 @@ if [ ! -x "${bin}" ]; then
 fi
 
 mkdir -p "${CORPUS_DIR}" "${CRASH_DIR}"
+# One-time seeding from the baked-in seeds (no-clobber; keeps growth per-target).
+if [ -d "${SEED_DIR}" ] && [ -z "$(ls -A "${CORPUS_DIR}" 2>/dev/null)" ]; then
+    cp -an "${SEED_DIR}/." "${CORPUS_DIR}/" 2>/dev/null || true
+fi
 
 # Readable sanitizer stacks; keep going past a single fuzzer-managed timeout.
 export ASAN_OPTIONS="${ASAN_OPTIONS:-abort_on_error=1:allocator_may_return_null=1:detect_leaks=0}"

@@ -29,27 +29,28 @@ angle belongs to a separate **CharLS / JPEG-LS** harness (`SUSP-BIO-05`).
 # from the repo root
 docker build -t biofuzz fuzzing/
 
-# Do NOT bind-mount over /work/out — the image builds fuzz_openjpeg/fuzz_gdcm/
-# fuzz_charls and versions.txt there, and mounting an empty host dir hides them
-# (run.sh would then report "not built"). Mount dedicated host dirs for the
-# artifacts you want to KEEP after the --rm container exits: the per-target crash
-# dirs and the corpus (run.sh writes reproducers to crashes_<target>/ and grows
-# corpus/ in place; both are lost with the container otherwise).
-mkdir -p fuzzing/persist/corpus fuzzing/persist/crashes_openjpeg
+# Mount ONLY the PER-TARGET dirs you want to keep after the --rm container exits.
+# Do NOT mount over /work/out (hides the built binaries) and do NOT mount over
+# /work/corpus (the baked-in seed set — incl. CharLS's 29 .jls). run.sh copies
+# those seeds into the per-target /work/corpus_<target> on first run, so mounting
+# an empty host corpus_<target> is safe (it gets re-seeded, not masked). Each
+# target keeps its OWN corpus + crashes so growth never cross-pollinates.
+mkdir -p fuzzing/persist/corpus_openjpeg fuzzing/persist/crashes_openjpeg
 docker run --rm -it \
-    -v "$PWD/fuzzing/persist/corpus:/work/corpus" \
+    -v "$PWD/fuzzing/persist/corpus_openjpeg:/work/corpus_openjpeg" \
     -v "$PWD/fuzzing/persist/crashes_openjpeg:/work/crashes_openjpeg" \
     biofuzz
 
-# inside the container (both harness binaries exist, so name the target explicitly):
+# inside the container (all three binaries exist, so name the target explicitly):
 ./run.sh openjpeg      # or: ./run.sh gdcm | ./run.sh charls
 # ... let it run; crashes land in ./crashes_openjpeg/ ...
 ./triage.sh openjpeg crashes_openjpeg/crash-<hash>   # target is REQUIRED here
 cat out/versions.txt   # pinned SHAs for the disclosure "version tested" field
 ```
-> To keep GDCM/CharLS artifacts too, add `-v .../crashes_gdcm:/work/crashes_gdcm`
-> (and `crashes_charls`) mounts. Never commit crash inputs to git — persist them
-> to a host dir only, for private disclosure.
+> For GDCM/CharLS, mount their own `corpus_<target>` + `crashes_<target>` pairs
+> (e.g. `-v .../corpus_charls:/work/corpus_charls -v .../crashes_charls:/work/crashes_charls`).
+> Never commit crash inputs to git — persist them to a host dir only, for private
+> disclosure (`.gitignore` covers `crashes*/`, `corpus_*/`, and `persist/`).
 
 ## ⚠️ Seeds matter more than anything (read before a real hunt)
 

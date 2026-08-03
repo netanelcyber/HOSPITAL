@@ -21,14 +21,19 @@ if [ $# -eq 2 ]; then
     target="$1"; crash="$2"
 elif [ $# -eq 1 ]; then
     crash="$1"
-    if   [ -x "${OUT_DIR}/fuzz_openjpeg" ] && [ ! -x "${OUT_DIR}/fuzz_gdcm" ]; then target="openjpeg"
-    elif [ -x "${OUT_DIR}/fuzz_gdcm" ] && [ ! -x "${OUT_DIR}/fuzz_openjpeg" ]; then target="gdcm"
+    # Infer only when EXACTLY ONE of the three harnesses is built (count them all).
+    present=()
+    [ -x "${OUT_DIR}/fuzz_openjpeg" ] && present+=(openjpeg)
+    [ -x "${OUT_DIR}/fuzz_gdcm" ]     && present+=(gdcm)
+    [ -x "${OUT_DIR}/fuzz_charls" ]   && present+=(charls)
+    if [ "${#present[@]}" -eq 1 ]; then
+        target="${present[0]}"
     else
-        echo "error: two harnesses present; specify: $0 {openjpeg|gdcm} <crash>" >&2
+        echo "error: ${#present[@]} harnesses present (${present[*]:-none}); specify target: $0 {openjpeg|gdcm|charls} <crash>" >&2
         exit 2
     fi
 else
-    echo "usage: $0 {openjpeg|gdcm} <crash-file>" >&2
+    echo "usage: $0 {openjpeg|gdcm|charls} <crash-file>" >&2
     exit 2
 fi
 
@@ -48,16 +53,22 @@ mkdir -p "${OUT_DIR}"
 export ASAN_OPTIONS="${ASAN_OPTIONS:-abort_on_error=1:allocator_may_return_null=1:detect_leaks=0}"
 export UBSAN_OPTIONS="${UBSAN_OPTIONS:-print_stacktrace=1:halt_on_error=1}"
 
-# Preserve the campaign's timeout so a timeout artifact reproduces promptly
-# instead of blocking on libFuzzer's 1200s default (and so minimization uses the
-# same threshold). Override with TIMEOUT_SEC if your campaign used another value.
+# Preserve the campaign's timeout AND allocation limit so replay reproduces the
+# same failure the campaign recorded. run.sh defaults to -timeout=25 and
+# MALLOC_LIMIT_MB=512; libFuzzer's malloc_limit otherwise defaults to rss_limit
+# (2048 MiB here), so an OOM artifact for a 512 MiB–2 GiB request would NOT
+# reproduce and the reproduction guard below would wrongly reject it. Override
+# via TIMEOUT_SEC / MALLOC_LIMIT_MB if your campaign used other values.
 TIMEOUT_SEC="${TIMEOUT_SEC:-25}"
+MALLOC_LIMIT_MB="${MALLOC_LIMIT_MB:-512}"
+lim_args=(-timeout="${TIMEOUT_SEC}" -rss_limit_mb=2048)
+[ "${MALLOC_LIMIT_MB}" != "0" ] && lim_args+=(-malloc_limit_mb="${MALLOC_LIMIT_MB}")
 
 echo "==> Reproducing under ${target} to capture sanitizer stack"
 san_log="${OUT_DIR}/san-${hash}.log"
 # Single-shot replay of the crash input; capture the sanitizer report.
 set +e
-"${bin}" -timeout="${TIMEOUT_SEC}" "${crash}" > "${san_log}" 2>&1
+"${bin}" "${lim_args[@]}" "${crash}" > "${san_log}" 2>&1
 rc=$?
 set -e
 
@@ -70,13 +81,34 @@ if [ "${rc}" -eq 0 ] || ! grep -Eqi 'ERROR: (AddressSanitizer|libFuzzer)|runtime
     exit 3
 fi
 
-echo "==> Minimizing input"
+echo "==> Minimizing input (crash-signature-preserving)"
 min="${crash}.min"
+# dedup_token_length=3 makes -minimize_crash keep the SAME crash signature rather
+# than drifting to a different defect an input might also trigger (observed in
+# practice — a drifted 132B min reproduced a different crash than the 784B input).
 set +e
-"${bin}" -minimize_crash=1 -runs=20000 -timeout="${TIMEOUT_SEC}" \
+ASAN_OPTIONS="${ASAN_OPTIONS}:dedup_token_length=3" \
+"${bin}" -minimize_crash=1 -runs=20000 "${lim_args[@]}" \
     -exact_artifact_path="${min}" "${crash}" >> "${san_log}" 2>&1
 set -e
-[ -f "${min}" ] || min="${crash}"   # fall back to original if minimization produced nothing
+
+# Re-validate: the minimized file must still reproduce the SAME owning frame as
+# the original replay. If it drifted (or produced nothing), fall back to the
+# original input so the report never pairs one defect's CWE with another's repro.
+orig_top="$(grep -E '#0 0x' "${san_log}" | head -n1 | sed -E 's/.* in ([^ ]+).*/\1/')"
+if [ -f "${min}" ]; then
+    min_log="${OUT_DIR}/san-${hash}.min.log"
+    set +e
+    "${bin}" "${lim_args[@]}" "${min}" > "${min_log}" 2>&1
+    set -e
+    min_top="$(grep -E '#0 0x' "${min_log}" | head -n1 | sed -E 's/.* in ([^ ]+).*/\1/')"
+    if [ -z "${min_top}" ] || { [ -n "${orig_top}" ] && [ "${min_top}" != "${orig_top}" ]; }; then
+        echo "==> Minimized input drifted (top frame '${min_top}' != '${orig_top}'); using ORIGINAL as reproducer." >&2
+        min="${crash}"
+    fi
+else
+    min="${crash}"   # minimization produced nothing
+fi
 
 # --- classify owning component from the TOP faulting frame -------------------
 # Ownership must come from which component owns the nearest-to-#0 application
