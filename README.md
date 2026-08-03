@@ -10,3 +10,6 @@
 - [רשימת חשדות ל-CVE — מועמדים לבדיקה](docs/suspected-cve-candidates.md) —
   השערות הגנתיות (threat-hunting leads) הנגזרות מדפוסי-השורש, עם שיטת אימות, תעדוף,
   ויעדי דיווח (responsible disclosure) לכל מוצר וגוף מתאם. אינה כוללת מזהי CVE אמיתיים או קוד ניצול.
+- [תבנית דיווח חולשה — Disclosure Report Template](docs/disclosure-report-template.md) —
+  טיוטה מוכנה למילוי לפתיחת advisory פרטי (Title/Version/CWE/Description/Impact/Reproduction/Fix),
+  עם דוגמה מלאה ו-checklist טרם הגשה. ללא exploit; דורשת אימות עצמאי לפני שליחה.
