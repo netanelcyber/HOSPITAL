@@ -18,3 +18,4 @@ wasm/target/
 logs/
 results/
 .pytest_cache/
+wasm/tests/fixture_*.json
