@@ -96,3 +96,30 @@ is committed. It can also be run standalone to produce sample files:
 ```bash
 python3 tests/make_samples.py /tmp/samples
 ```
+
+## dicom_modify_ts.py
+
+Rewrite the Transfer Syntax UID tag `(0002,0010)` in DICOM files for testing.
+
+⚠️ **Warning:** Output files will have mismatched metadata (declared syntax ≠ actual pixel data encoding). Use for testing only, not production.
+
+### Usage
+
+```bash
+# Convert one file
+python3 dicom_modify_ts.py input.dcm --to j2k --output-dir ./out
+
+# Batch convert directory
+python3 dicom_modify_ts.py /path/to/dicoms --to htj2k --output-dir ./test-set
+
+# Use UID directly
+python3 dicom_modify_ts.py study.dcm --to 1.2.840.10008.1.2.4.201
+```
+
+Shorthand syntaxes: `implicit`, `explicit`, `explicit-be`, `rle`, `j2k-loss`, `j2k`, `jpegls`, `jpeg`, `htj2k`
+
+Then scan the output to verify the tag was rewritten:
+
+```bash
+python3 dicom_ts_scan.py ./out --csv verify.csv
+```
