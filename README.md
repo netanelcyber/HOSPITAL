@@ -1,5 +1,9 @@
 # HOSPITAL
 
+Tools for analyzing DICOM Transfer Syntax usage in medical imaging archives (PACS).
+
+**Quick test:** See [PACS_SETUP.md](PACS_SETUP.md) to run a local Orthanc PACS with `docker-compose` and test the full workflow.
+
 ## dicom_ts_scan.py
 
 Reports which DICOM Transfer Syntaxes a directory tree of images actually uses —

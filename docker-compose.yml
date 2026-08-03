@@ -1,0 +1,23 @@
+version: "3.9"
+
+services:
+  orthanc:
+    image: jodogne/orthanc:latest
+    container_name: orthanc-pacs
+    ports:
+      - "8042:8042"  # HTTP REST API + web UI
+      - "4242:4242"  # DICOM listener (DIMSE)
+    environment:
+      ORTHANC_JSON: /etc/orthanc/orthanc.json
+    volumes:
+      - ./orthanc.json:/etc/orthanc/orthanc.json:ro
+      - orthanc-data:/var/lib/orthanc/db
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8042/api/system"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  orthanc-data:
+    driver: local

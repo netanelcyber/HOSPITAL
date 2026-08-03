@@ -1,0 +1,38 @@
+{
+  "Name": "Orthanc Test PACS",
+  "ListenPort": 8042,
+  "DicomPort": 4242,
+  "Verbose": false,
+  "RemoteAccessAllowed": false,
+  "AuthenticationEnabled": false,
+  "StorageDirectory": "/var/lib/orthanc/db",
+  "TemporaryDirectory": "/tmp",
+  "DefaultEncoding": "UTF-8",
+
+  "DicomModalities": {
+    "SAMPLE": ["127.0.0.1", 104]
+  },
+
+  "DicomAlwaysAllowEcho": true,
+  "DicomAlwaysAllowStore": true,
+
+  "CaseSensitiveSearch": false,
+
+  "UnknownSopClassAccepted": true,
+
+  "DicomScuTimeout": 10,
+
+  "HttpCompressionEnabled": true,
+
+  "IngestTranscodingOfIncompleteFiles": false,
+
+  "TranscodingOptions": [
+    {
+      "Dcm2jsonParameters": []
+    }
+  ],
+
+  "Plugins": [],
+
+  "PluginsDirectory": "/usr/share/orthanc/plugins"
+}
