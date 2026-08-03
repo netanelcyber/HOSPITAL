@@ -117,6 +117,25 @@ is an under-appreciated code-execution surface in that trust decision.
 
 ---
 
+## 🔵/⚪ C-4 — Anonymous comment `author_url` has no scheme allowlist → latent theme XSS
+
+**Location:** `frontend_concern.rb:62` stores `post_comment[:url]` verbatim as
+`author_url`; `post_comment_decorator.rb:36 the_author_url` returns it unfiltered.
+
+**Assessment.** Comment **content** is safe in shipped code: the default theme
+renders `<%= comment.content %>` (`_comments_list.html.erb:14`), and ERB
+auto-escapes — so the old unauth comment-XSS class (CVE-2021-25969) stays closed.
+`author_url`, however, is stored with **no scheme validation** (a
+`javascript:`/`data:` value is accepted). The default theme does **not** render
+`the_author_url` in an `href`, so it is **not exploitable as shipped** (🔵). But
+any theme that does `<a href="<%= comment.the_author_url %>">` would have XSS,
+because HTML-escaping does not neutralize a `javascript:` scheme (no angle
+brackets to escape). This is a latent **theme footgun** (⚪), not a core bug.
+
+**Cheap hardening:** validate `author_url` scheme (`http`/`https` only) at save
+time in `save_comment`, so no theme can turn it into a sink. Low effort, removes
+a whole latent class.
+
 ## Summary
 
 | ID | Class | Confidence | Status |
@@ -124,6 +143,7 @@ is an under-appreciated code-execution surface in that trust decision.
 | C-1 | Open redirect (CWE-601) | 🟠 ~30% | Needs dynamic test (§C-1 steps) |
 | C-2 | Template-path LFI | 🔵 killed | Route-constrained, safe |
 | C-3 | Route-DSL execution | ⚪ | Requires plugin file write (supply-chain) |
+| C-4 | Comment `author_url` XSS | 🔵/⚪ | Safe as shipped; latent theme footgun |
 
 **Net:** one worth-testing candidate (C-1, an open redirect with real code smell
 but likely blunted by Rails' own guard), one killed, one supply-chain note. This
