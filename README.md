@@ -284,6 +284,50 @@ Indeterminate zones are reported, not collapsed. FIB-4 between its cutoffs
 catches roughly a third of patients, and the honest output there is
 "elastography is the next step", not a forced call.
 
+### Trained GI model
+
+`training/gastro_model.py` fits and — more importantly — honestly evaluates a
+diagnosis model against the scores it would replace.
+
+With ~20 cirrhosis events in 234 admissions, the ten-events-per-predictor rule
+allows two or three features, not the 100-plus `LabFeatureExtractor` produces.
+So: L2-regularized logistic regression rather than trees, the validated scores
+as inputs rather than raw labs, and the baseline scored through the identical
+resampling protocol.
+
+**Shipped model: platelet count + AST/ALT ratio.**
+
+| Approach | Features | AUC (bootstrap 95% CI) |
+|---|---|---|
+| **Model: platelets + AST/ALT** | **2** | **0.943 [0.862–0.994]** |
+| Model: all scores + labs | 9 | 0.955 [0.797–1.000] |
+| AST/ALT alone | 1 | 0.843 |
+| FIB-4 alone | 1 | 0.795 |
+
+Three findings decided the shipped configuration:
+
+1. **The model beats the published score** — 0.94 against 0.80 for FIB-4 alone,
+   on the same patients under the same protocol.
+2. **Two features match nine.** The point estimates differ by less than the
+   noise and the two-feature interval is *narrower*. The extra seven buy
+   variance, not signal.
+3. **The nine-feature fit gives FIB-4 a negative coefficient** (−1.60) while
+   FIB-4 alone is positively associated with cirrhosis. FIB-4 carries platelets
+   in its denominator, so once platelet count enters, FIB-4's residual variance
+   flips sign. A coefficient contradicting its own univariate direction is a
+   collinearity artifact — shipping it would deploy a model whose internals
+   argue with the literature it came from.
+
+Platelet count carrying the largest coefficient is the expected result:
+thrombocytopenia from portal hypertension is the most reliable single lab
+marker of cirrhosis.
+
+**Interval caveat.** Cross-validation folds share training data, so a CI across
+them is far too narrow — [0.914–0.951] from folds against [0.797–1.000]
+bootstrapped over patients for the same model. `bootstrap_auc_ci` is what gets
+reported; the fold interval is kept only to show fold-to-fold stability. With
+20 events these results are suggestive, not established.
+
 ### Validation on real patients
 
 Scored against ICD-coded phenotypes on 234 MIMIC-IV demo admissions
