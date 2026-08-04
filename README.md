@@ -260,6 +260,53 @@ only to fetch a plain-language explanation for a condition the rules already
 named — putting an anonymously editable source in the clinical path would make
 the medicine unaccountable. Enrichment failure is non-fatal by design.
 
+## Gastroenterology and hepatology
+
+Hepatology suits a lab-only system unusually well: several scores that drive
+real decisions are computed entirely from the panel. MELD allocates liver
+transplants in the United States from four analytes; FIB-4 and APRI are
+first-line non-invasive fibrosis tests.
+
+`features/gastro.py` implements them as the **published formulae with their real
+clamping rules**, not as a learned approximation. These are externally validated
+on cohorts far larger than anything available here, and a clinician can
+recompute MELD by hand and check it. Fitting a model to approximate a published
+formula replaces a traceable calculation with an opaque one and loses accuracy
+doing it.
+
+Implemented: MELD / MELD-Na, FIB-4, APRI, R-factor, AST/ALT (De Ritis), Maddrey
+DF, Atlanta lipase criterion, and the lab-derivable components of BISAP and
+Glasgow-Blatchford — reported explicitly as partial, because presenting a
+partial BISAP as a BISAP understates severity in exactly the sick patients it
+exists to find.
+
+Indeterminate zones are reported, not collapsed. FIB-4 between its cutoffs
+catches roughly a third of patients, and the honest output there is
+"elastography is the next step", not a forced call.
+
+### Validation on real patients
+
+Scored against ICD-coded phenotypes on 234 MIMIC-IV demo admissions
+(`data/gastro_cohort.py`):
+
+| Score | Target | AUC | Median (case / control) |
+|---|---|---|---|
+| AST/ALT | Cirrhosis | **0.845** | 2.47 / 1.12 |
+| FIB-4 | Any liver disease | **0.832** | 6.37 / 1.52 |
+| APRI | Any liver disease | 0.814 | 1.93 / 0.34 |
+| FIB-4 | Cirrhosis | 0.805 | 6.23 / 1.81 |
+
+18 of 19 coded cirrhosis patients scored FIB-4 above 2.67; none fell below 1.3.
+
+On the same 234 admissions a *trained* deterioration model reaches AUC 0.53.
+The published formulae work where learning from this cohort does not — which is
+the argument for implementing them rather than fitting them.
+
+Caveats that limit these numbers: ICD codes are billing labels, not adjudicated
+diagnoses, and under-code mild disease. n=20 cirrhosis is small. FIB-4
+detecting coded cirrhosis is confirmatory of a correct implementation, not a
+new finding.
+
 ## Scale and tuning
 
 The pipeline was benchmarked at **1,000,000 stays** (26M lab rows, 1.06 GB) in
@@ -274,6 +321,11 @@ through a mock would measure the mock.
 | Average precision | 0.278 against a 0.115 baseline |
 | Brier raw → calibrated | 0.208 → 0.093 |
 | Recall at 5% alert budget | 0.198 (precision 0.370) |
+
+Parameters do not transfer across scale. The 1M-tuned defaults
+(`min_samples_leaf=50`, early stopping on a 10% split) applied to the 361-stay
+page cohort stopped after 25 trees and scored AUC 0.416 — *below chance*. The
+page build now selects its regime from the cohort size explicitly.
 
 A sweep over depth 5–12 and 300–800 estimators moved validation AP by under
 0.002. At this volume the hyperparameters sit on a plateau and early stopping

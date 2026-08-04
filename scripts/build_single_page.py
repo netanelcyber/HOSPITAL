@@ -135,14 +135,31 @@ def train_bundle(search_base: str | None = None) -> dict:
     X_train = X_train.select_dtypes(include=[np.number])
     X_val = X_val[X_train.columns]
 
+    # Parameters scale with cohort size. The library defaults are tuned for a
+    # million stays, where min_samples_leaf=50 and early stopping on a 10%
+    # split are right; applied to a few hundred rows the same settings stop
+    # after ~25 trees and score below chance. Tuning at one scale and shipping
+    # to another is its own bug class, so the size is read here explicitly.
+    small = len(cohort) < 20_000
+    leaf = 5 if small else 50
+    tree_params = {
+        "max_depth": 4,
+        "min_samples_leaf": leaf,
+        "early_stopping": not small,
+    }
+    logger.info(
+        "Cohort of %d -> %s regime (min_samples_leaf=%d, early_stopping=%s)",
+        len(cohort), "small-data" if small else "large-data", leaf, not small,
+    )
+
     # Fewer, shallower trees than the training default: the bundle ships to
     # every browser, so size is a first-class constraint here.
     ensemble = DeteriorationEnsemble(
         backends=("xgboost", "lightgbm"),
         params={
-            "xgboost": {"n_estimators": 120, "max_depth": 4},
-            "lightgbm": {"n_estimators": 120, "max_depth": 4},
-            "sklearn": {"max_iter": 120, "max_depth": 4},
+            "xgboost": {"n_estimators": 120, "max_depth": 4, "min_child_weight": leaf},
+            "lightgbm": {"n_estimators": 120, "max_depth": 4, "min_child_samples": leaf},
+            "sklearn": {"max_iter": 120, **tree_params},
         },
     )
     ensemble.fit(X_train, y[:split])

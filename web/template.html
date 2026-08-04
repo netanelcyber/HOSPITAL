@@ -110,6 +110,7 @@ code { direction: ltr; display: inline-block; font-family: ui-monospace, Menlo, 
 
 <div class="tabs" role="tablist">
   <button class="tab" role="tab" aria-selected="true" data-panel="p-score">ניקוד סיכון</button>
+  <button class="tab" role="tab" aria-selected="false" data-panel="p-gi">גסטרו / כבד</button>
   <button class="tab" role="tab" aria-selected="false" data-panel="p-nlp">ניתוח דוח רפואי</button>
   <button class="tab" role="tab" aria-selected="false" data-panel="p-paper">מחולל מאמרים (PMC)</button>
   <button class="tab" role="tab" aria-selected="false" data-panel="p-about">אודות</button>
@@ -166,6 +167,33 @@ code { direction: ltr; display: inline-block; font-family: ui-monospace, Menlo, 
       רשת — התממה בצד השרת הייתה חסרת ערך, שכן הנתונים הגולמיים כבר היו חוצים
       את הרשת.</p>
     <div class="scroll"><pre class="ltr" id="anon-preview" style="font-size:.8rem"></pre></div>
+  </div>
+</section>
+
+<!-- ==================== גסטרו ==================== -->
+<section class="panel" id="p-gi" hidden>
+  <div class="card">
+    <h2>מדדי גסטרואנטרולוגיה והפטולוגיה</h2>
+    <p class="sub">אלו <strong>נוסחאות מפורסמות ומתוקפות</strong>, לא מודל מאומן.
+      MELD מקצה השתלות כבד בארה"ב משלושה ערכי מעבדה; FIB-4 ו-APRI הם בדיקות קו
+      ראשון לפיברוזיס. ניתן לחשב אותן ביד ולבדוק — וזו בדיוק הסיבה להעדיף אותן
+      על מודל אטום.</p>
+    <div class="note">
+      <strong>אימות על מטופלים אמיתיים.</strong> על 234 אשפוזי MIMIC-IV עם תוויות
+      ICD: FIB-4 מפריד מחלת כבד ב-AUC 0.832, יחס AST/ALT שחמת ב-0.845.
+      18 מתוך 19 חולי שחמת מקודדים קיבלו FIB-4 מעל 2.67, ואפס מתחת ל-1.3.
+    </div>
+    <div class="grid" id="gi-labs" style="margin-top:16px"></div>
+    <div class="row">
+      <button id="btn-gi">חשב מדדים</button>
+      <button class="ghost" id="btn-gi-demo">דוגמה: שחמת מפורקת</button>
+      <button class="ghost" id="btn-gi-clear">נקה</button>
+    </div>
+  </div>
+  <div class="card" id="gi-result" hidden>
+    <h2>תוצאות</h2>
+    <div id="gi-scores"></div>
+    <div id="gi-missing"></div>
   </div>
 </section>
 
@@ -586,6 +614,169 @@ function analyzeNote(text) {
     kept.push(m);
   }
   return kept;
+}
+
+/* ===================== Gastroenterology scores =====================
+   Published formulae with their real clamping rules, mirroring
+   features/gastro.py. A score that drifts from the Python implementation is
+   the same class of bug the WASM parity test exists to catch, so the
+   arithmetic is kept literal rather than refactored into something tidier. */
+
+const GI_FIELDS = [
+  { key: "bilirubin", he: "בילירובין", unit: "mg/dL" },
+  { key: "inr", he: "INR", unit: "" },
+  { key: "creatinine", he: "קריאטינין", unit: "mg/dL" },
+  { key: "sodium", he: "נתרן", unit: "mmol/L" },
+  { key: "aspartate_aminotransferase", he: "AST", unit: "U/L" },
+  { key: "alanine_aminotransferase", he: "ALT", unit: "U/L" },
+  { key: "alkaline_phosphatase", he: "ALP", unit: "U/L" },
+  { key: "platelet_count", he: "טסיות", unit: "K/uL" },
+  { key: "gamma_glutamyl_transferase", he: "GGT", unit: "U/L" },
+  { key: "prothrombin_time", he: "PT", unit: "sec" },
+  { key: "lipase", he: "ליפאז", unit: "U/L" },
+  { key: "blood_urea_nitrogen", he: "אוריאה (BUN)", unit: "mg/dL" },
+  { key: "hemoglobin", he: "המוגלובין", unit: "g/dL" },
+  { key: "age", he: "גיל", unit: "שנים" },
+];
+
+const AST_ULN = 40, ALT_ULN = 56, ALP_ULN = 147, LIPASE_ULN = 160;
+
+function giScores(L) {
+  const out = [], miss = [];
+  const has = k => L[k] !== null && L[k] !== undefined && !Number.isNaN(L[k]);
+  const need = (name, keys) => {
+    const m = keys.filter(k => !has(k));
+    if (m.length) miss.push({ name, keys: m });
+    return !m.length;
+  };
+
+  // MELD-Na. Clamps are part of the score: values below 1 would make the logs
+  // negative, and creatinine is capped at 4 because dialysis masks the very
+  // dysfunction the term measures.
+  if (need("MELD-Na", ["bilirubin", "inr", "creatinine"])) {
+    const bil = Math.max(L.bilirubin, 1), inr = Math.max(L.inr, 1);
+    const cr = Math.min(Math.max(L.creatinine, 1), 4);
+    let m = Math.round(3.78 * Math.log(bil) + 11.2 * Math.log(inr) + 9.57 * Math.log(cr) + 6.43);
+    let nm = "MELD";
+    if (has("sodium")) {
+      const na = Math.min(Math.max(L.sodium, 125), 137);
+      if (m > 11) m = m + 1.32 * (137 - na) - 0.033 * m * (137 - na);
+      nm = "MELD-Na";
+    }
+    const v = Math.min(Math.max(Math.round(m), 6), 40);
+    const b = v >= 30 ? ["very_high", "‏≈52% תמותה ב-3 חודשים ללא טיפול; עדיפות להשתלה."]
+            : v >= 20 ? ["high", "‏≈20% תמותה ב-3 חודשים; הפניה להפטולוג."]
+            : v >= 15 ? ["moderate", "‏≈6% תמותה ב-3 חודשים; תועלת מהשתלה מתחילה כאן."]
+            : ["low", "סיכון קצר-טווח נמוך."];
+    out.push({ name: nm, value: v, band: b[0], interp: b[1],
+      ref: "Kim WR et al. N Engl J Med 2008;359:1018",
+      caveat: "מתוקף למחלת כבד כרונית. אינו בדיקה אבחנתית, ומטעה באי-ספיקת כבד חדה." });
+  }
+
+  if (need("FIB-4", ["aspartate_aminotransferase", "alanine_aminotransferase", "platelet_count", "age"])
+      && L.platelet_count > 0 && L.alanine_aminotransferase > 0) {
+    const v = (L.age * L.aspartate_aminotransferase) /
+              (L.platelet_count * Math.sqrt(L.alanine_aminotransferase));
+    const lower = L.age >= 65 ? 2.0 : 1.30;
+    const b = v < lower ? ["low", `פיברוזיס מתקדם לא סביר (<${lower}); ערך מנבא שלילי גבוה.`]
+            : v > 2.67 ? ["high", "פיברוזיס מתקדם סביר (>2.67); הפניה לאלסטוגרפיה או ביופסיה."]
+            : ["indeterminate", `בין ${lower} ל-2.67 — לא חד-משמעי. כשליש מהחולים נופלים כאן; ` +
+               "הצעד הבא הוא אלסטוגרפיה, לא ניחוש."];
+    out.push({ name: "FIB-4", value: +v.toFixed(2), band: b[0], interp: b[1],
+      ref: "Sterling RK et al. Hepatology 2006;43:1317",
+      caveat: "לא אמין מתחת לגיל 35 או בהפטיטיס חדה עם טרנסאמינאזות קיצוניות." });
+  }
+
+  if (need("APRI", ["aspartate_aminotransferase", "platelet_count"]) && L.platelet_count > 0) {
+    const v = (L.aspartate_aminotransferase / AST_ULN * 100) / L.platelet_count;
+    const b = v < 0.5 ? ["low", "פיברוזיס משמעותי לא סביר (<0.5)."]
+            : v > 1.5 ? ["high", "פיברוזיס משמעותי סביר (>1.5); שחמת נרמזת מעל 2.0."]
+            : ["indeterminate", "בין 0.5 ל-1.5 — לא מסקנתי בפני עצמו."];
+    out.push({ name: "APRI", value: +v.toFixed(2), band: b[0], interp: b[1],
+      ref: "Wai CT et al. Hepatology 2003;38:518",
+      caveat: "פותח בהפטיטיס C; ביצועים פחותים באטיולוגיות אחרות." });
+  }
+
+  if (need("R-factor", ["alanine_aminotransferase", "alkaline_phosphatase"]) && L.alkaline_phosphatase > 0) {
+    const v = (L.alanine_aminotransferase / ALT_ULN) / (L.alkaline_phosphatase / ALP_ULN);
+    const b = v >= 5 ? ["hepatocellular", "נזק הפטוצלולרי (R≥5). לשקול הפטיטיס ויראלית, נזק תרופתי, אוטואימוני, איסכמי."]
+            : v <= 2 ? ["cholestatic", "נזק כולסטטי (R≤2). הדמיה לחסימה מרתית; לשקול PBC, PSC, כולסטזיס תרופתי."]
+            : ["mixed", "דפוס מעורב (2<R<5); נזק כבדי תרופתי מופיע כך לעיתים קרובות."];
+    out.push({ name: "R-factor", value: +v.toFixed(2), band: b[0], interp: b[1],
+      ref: "Danan G, Benichou C. J Clin Epidemiol 1993;46:1323" });
+  }
+
+  if (need("AST/ALT", ["aspartate_aminotransferase", "alanine_aminotransferase"]) && L.alanine_aminotransferase > 0) {
+    const v = L.aspartate_aminotransferase / L.alanine_aminotransferase;
+    const ggt = has("gamma_glutamyl_transferase") && L.gamma_glutamyl_transferase > 48;
+    const b = v > 2 ? ["alcoholic_pattern", "יחס >2 מרמז על מחלת כבד אלכוהולית" +
+                (ggt ? ", ו-GGT המוגבר תומך בכך." : "; GGT היה תומך בכך.")]
+            : v > 1 ? ["elevated", "יחס >1 — נראה בשחמת מכל אטיולוגיה וב-NASH עם פיברוזיס."]
+            : ["normal", "יחס <1 — הדפוס הרגיל בהפטיטיס ויראלית וב-NAFLD ללא פיברוזיס."];
+    out.push({ name: "יחס AST/ALT", value: +v.toFixed(2), band: b[0], interp: b[1],
+      ref: "De Ritis F et al. Clin Chim Acta 1957;2:70",
+      caveat: "‏AST עולה גם משריר; רבדומיוליזה מחקה את הדפוס." });
+  }
+
+  if (need("Maddrey DF", ["prothrombin_time", "bilirubin"])) {
+    const v = 4.6 * (L.prothrombin_time - 12) + L.bilirubin;
+    const b = v >= 32 ? ["severe", "הפטיטיס אלכוהולית קשה (≥32); ≈35% תמותה בחודש ללא טיפול."]
+            : ["non_severe", "מתחת לסף 32 למחלה קשה."];
+    out.push({ name: "Maddrey DF", value: +v.toFixed(1), band: b[0], interp: b[1],
+      ref: "Maddrey WC et al. Gastroenterology 1978;75:193",
+      caveat: "מניח אבחנה קלינית של הפטיטיס אלכוהולית; מדרג חומרה ואינו מבסס אבחנה." });
+  }
+
+  if (need("ליפאז", ["lipase"])) {
+    const mult = L.lipase / LIPASE_ULN;
+    const b = mult >= 3 ? ["atlanta_positive", `ליפאז ≥3× מהגבול העליון (${mult.toFixed(1)}×) — ` +
+                "עומד בקריטריון הביוכימי של אטלנטה. האבחנה דורשת שניים מתוך שלושה: זה, כאב אופייני, או הדמיה."]
+            : mult >= 1 ? ["raised", `ליפאז מוגבר (${mult.toFixed(1)}× ULN) אך מתחת ל-3×. ` +
+                "נראה גם באי-ספיקת כליות, איסכמיה של המעי ונקב."]
+            : ["normal", "ליפאז תקין. אינו שולל דלקת לבלב המופיעה מאוחר או במחלה כרונית."];
+    out.push({ name: "ליפאז (אטלנטה)", value: +mult.toFixed(2), band: b[0], interp: b[1],
+      ref: "Banks PA et al. Gut 2013;62:102",
+      caveat: "מידת ההגבהה אינה מעידה על חומרה. ליפאז ספציפי יותר מעמילאז." });
+  }
+
+  return { scores: out, missing: miss };
+}
+
+const GI_BAND_CLASS = { very_high: "yes", high: "yes", severe: "yes",
+  atlanta_positive: "yes", moderate: "no", indeterminate: "no", mixed: "no",
+  raised: "no", elevated: "no", low: "ok", normal: "ok", non_severe: "ok",
+  hepatocellular: "no", cholestatic: "no", alcoholic_pattern: "yes" };
+
+function renderGi() {
+  const L = {};
+  for (const f of GI_FIELDS) {
+    const el = document.getElementById("gi-" + f.key);
+    const raw = el.value.trim();
+    L[f.key] = raw === "" ? null : Number(raw);
+  }
+  const { scores, missing } = giScores(L);
+  $("gi-result").hidden = false;
+
+  $("gi-scores").innerHTML = scores.length ? scores.map(s => `
+    <div class="card" style="margin:10px 0;padding:14px">
+      <div style="display:flex;gap:10px;align-items:baseline;flex-wrap:wrap">
+        <strong>${s.name}</strong>
+        <span class="score" style="font-size:1.6rem">${s.value}</span>
+        <span class="pill ${GI_BAND_CLASS[s.band] || "no"}">${s.band}</span>
+      </div>
+      <p class="sub" style="margin:8px 0 0">${s.interp}</p>
+      ${s.caveat ? `<p class="sub" style="margin:6px 0 0"><em>סייג: ${s.caveat}</em></p>` : ""}
+      <p class="unit" style="margin:6px 0 0">${s.ref}</p>
+    </div>`).join("") : `<p class="sub">אין מספיק ערכים לחישוב מדד כלשהו.</p>`;
+
+  // Non-computable scores are listed rather than dropped: a silently absent
+  // score reads as a normal one.
+  $("gi-missing").innerHTML = missing.length ? `
+    <h3>לא ניתן לחשב</h3>
+    <div class="note">${missing.map(m =>
+      `<div><strong>${m.name}</strong> — חסר: ${m.keys.map(k =>
+        (GI_FIELDS.find(f => f.key === k) || {}).he || k).join(", ")}</div>`).join("")}
+    </div>` : "";
 }
 
 /* ===================== Differential from lab patterns =====================
@@ -1075,6 +1266,25 @@ async function boot() {
     $("result").hidden = true;
   });
 
+  const giHost = $("gi-labs");
+  giHost.innerHTML = GI_FIELDS.map(f => `<div>
+      <label for="gi-${f.key}">${f.he} ${f.unit ? `<span class="unit">${f.unit}</span>` : ""}</label>
+      <input id="gi-${f.key}" type="number" step="any" inputmode="decimal"></div>`).join("");
+  $("btn-gi").addEventListener("click", renderGi);
+  $("btn-gi-clear").addEventListener("click", () => {
+    GI_FIELDS.forEach(f => { document.getElementById("gi-" + f.key).value = ""; });
+    $("gi-result").hidden = true;
+  });
+  $("btn-gi-demo").addEventListener("click", () => {
+    const demo = { bilirubin: 6.8, inr: 1.9, creatinine: 1.6, sodium: 129,
+      aspartate_aminotransferase: 180, alanine_aminotransferase: 72,
+      alkaline_phosphatase: 210, platelet_count: 88, gamma_glutamyl_transferase: 340,
+      prothrombin_time: 19.5, blood_urea_nitrogen: 32, hemoglobin: 9.1, age: 54 };
+    GI_FIELDS.forEach(f => {
+      document.getElementById("gi-" + f.key).value = demo[f.key] ?? "";
+    });
+    renderGi();
+  });
   $("btn-wiki").addEventListener("click", enrichFromWikipedia);
   $("btn-nlp").addEventListener("click", () => renderNlp(analyzeNote($("note").value)));
   $("btn-note-example").addEventListener("click", () => {
