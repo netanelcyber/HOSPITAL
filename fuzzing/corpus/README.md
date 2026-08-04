@@ -5,13 +5,16 @@ well-formed JPEG2000 so the fuzzer reaches deep decoder code quickly.
 
 **These are valid images, not exploits.** Do not place crash reproducers here.
 
-## ⚠️ The default Docker build ships NO seeds here
+## ⚠️ The default Docker build ships NO **JPEG2000** seeds here
 
-The `Dockerfile` clones OpenJPEG/GDCM/CharLS with `--depth 1` and **without their
-test-data submodules**, so their sample images are **not** present in `/src/*`.
-`build.sh`'s `find ... -exec cp` therefore usually copies **nothing**, and a first
-run is effectively **seedless** (see `../README.md` → "Seeds matter more than
-anything" and `../RESULTS.md`). You must populate seeds yourself before a real hunt.
+- **CharLS (JPEG-LS):** ✅ fine out of the box — CharLS ships its `*.jls` conformance
+  images **in-tree** (not a submodule), so the `--depth 1` clone includes them and
+  `build.sh` copies the ~29 seeds. The `charls`/`charls_asan` campaigns are seeded.
+- **OpenJPEG / GDCM (JPEG2000):** ⚠️ **seedless** by default — their sample images live
+  in **test-data submodules** that a `--depth 1` clone omits, so `build.sh`'s
+  `find ... -exec cp` finds no `*.j2k`/`*.jp2`/J2K-`*.dcm` (see `../README.md` →
+  "Seeds matter more than anything" and `../RESULTS.md`). You must populate these
+  yourself before a real JPEG2000 hunt.
 
 ## How to actually get seeds
 
@@ -37,6 +40,7 @@ Record where each non-generated seed came from (project + license) so the corpus
 reproducible and redistributable. Seeds pulled from OpenJPEG/GDCM/CharLS test trees
 carry those projects' licenses.
 
-`build.sh` *attempts* to copy any `*.j2k`/`*.jp2`/`*.dcm`/`*.jls` it finds under
-`/src/*`, but with shallow clones there usually are none — treat auto-population as
-best-effort, not guaranteed.
+`build.sh` copies any `*.j2k`/`*.jp2`/`*.dcm`/`*.jls` it finds under `/src/*`. In a
+shallow clone that yields the CharLS `*.jls` (in-tree) but typically **no** JPEG2000
+test data (submodule-only) — treat JPEG2000 auto-population as best-effort, not
+guaranteed.

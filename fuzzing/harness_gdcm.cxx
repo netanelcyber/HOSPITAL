@@ -22,9 +22,13 @@
 #include "gdcmImage.h"
 
 extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
-    // A whole DICOM object (preamble + meta + a compressed frame) needs some
-    // minimum size; skip trivially short inputs to keep exec/s high.
-    if (size < 132) {
+    // Only a trivially-empty guard. Do NOT require the 132-byte Part-10
+    // preamble+prefix: that's a file-format convention, not a minimum for every
+    // dataset GDCM ingests. Preamble-less objects (DIMSE-derived datasets,
+    // legacy ACR-NEMA, minimized malformed inputs) are a real parser surface,
+    // and gating at 132 also blocks libFuzzer from minimizing below that. Let
+    // gdcm::ImageReader::Read() reject invalid streams itself.
+    if (size < 8) {
         return 0;
     }
 

@@ -58,7 +58,11 @@ pointed at third-party systems. For those, the right artifacts are already in `.
 
 1. **B04/B05 done right** — real J2K/JLS seed corpora + hours of fuzzing (biggest lever for the
    top-CVSS RCE class). Add `-jobs/-workers`, reuse grown corpus.
-2. **B06/B07** — add RT-STRUCT and encapsulated-PDF DICOM seeds to reach those parser paths.
+2. **B06** — add RT-STRUCT seeds; reachable via the existing GDCM `ImageReader` harness.
+   **B07 (encapsulated PDF)** — seeds alone do NOT reach it: the current `harness_gdcm.cxx`
+   only drives `ImageReader`/`GetBuffer` (Pixel Data) and never invokes a PDF/encapsulated-
+   document parser. Write a **dedicated embedded-document harness** (or drive a viewer) FIRST,
+   then seed it — otherwise the campaign spends time without testing B07.
 3. Triage the **CharLS overflow** against CharLS's issue tracker / OSS-Fuzz before any contact —
    if it's genuinely new *and* shown to reach memory, only then it climbs the queue.
 4. For ranks below the line, verify on **owned** app/network instances using the docs above.
