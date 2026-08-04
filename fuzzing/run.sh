@@ -59,10 +59,12 @@ export UBSAN_OPTIONS="${UBSAN_OPTIONS:-print_stacktrace=1:halt_on_error=1}"
 
 # NOTE on timeouts: -timeout=25 below means a unit running >25 s ABORTS the whole
 # process (writes a slow-unit/timeout artifact) — in single-process mode it does
-# NOT "keep going" past it. The recorded OpenJPEG/CharLS runs did hit slow units,
-# so a real campaign must either pass -jobs=N (libFuzzer starts a fresh worker
-# after each abort; note -ignore_timeouts applies only in fork mode) or guard the
-# known slow path in the harness. One slow input otherwise ends the default hunt.
+# NOT "keep going" past it. The recorded OpenJPEG/CharLS runs did hit slow units.
+# For a campaign that survives repeated known timeouts/OOMs, use FORK mode:
+#   ./run.sh <t> -fork=$(nproc) -ignore_timeouts=1 -ignore_ooms=1 -ignore_crashes=0
+# (-ignore_timeouts/-ignore_ooms apply only under -fork). Plain -jobs=N gives just
+# N finite attempts and then exits, so it does NOT continue indefinitely. The most
+# robust fix is still to guard the known slow/allocating path IN THE HARNESS.
 
 # Single-allocation ceiling. IMPORTANT: -malloc_limit_mb does NOT skip an input
 # and continue — per libFuzzer, "the fuzzer will exit if the target tries to
@@ -72,8 +74,9 @@ export UBSAN_OPTIONS="${UBSAN_OPTIONS:-print_stacktrace=1:halt_on_error=1}"
 # single-process run this still stops the campaign on that known condition.
 # The real fix is to filter/guard the known allocation IN THE HARNESS (as
 # harness_openjpeg.c does for image dimensions); this cap only makes the OOM
-# fast to spot. To survive it in a campaign, pair with -jobs=N so libFuzzer
-# restarts a fresh worker after each OOM. Set MALLOC_LIMIT_MB=0 to disable.
+# fast to spot. To survive it across a campaign, use -fork=N with -ignore_ooms=1
+# (fork mode restarts children indefinitely); plain -jobs=N is only N attempts.
+# Set MALLOC_LIMIT_MB=0 to disable.
 MALLOC_LIMIT_MB="${MALLOC_LIMIT_MB:-512}"
 malloc_arg=()
 [ "${MALLOC_LIMIT_MB}" != "0" ] && malloc_arg=(-malloc_limit_mb="${MALLOC_LIMIT_MB}")

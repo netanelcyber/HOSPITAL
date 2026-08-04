@@ -95,12 +95,24 @@ if [ "${rc}" -eq 0 ] || ! grep -Eqi 'ERROR: (AddressSanitizer|libFuzzer)|runtime
     exit 3
 fi
 
-# Capture the ORIGINAL replay's top frame BEFORE minimizing, from the clean
-# replay log only. Frame lookup tolerates zero matches (a libFuzzer OOM/timeout
-# report can carry the accepted diagnostic with NO `#0 0x` app frame): under
-# `set -o pipefail` a no-match grep would fail the pipeline and abort triage, so
-# guard with `|| true` — an empty orig_top just means "no frame to compare".
-orig_top="$( { grep -E '#0 0x' "${san_log}" || true; } | head -n1 | sed -E 's/.* in ([^ ]+).*/\1/')"
+# Signature = the first APPLICATION frame (project source / harness), NOT `#0`.
+# For a timeout or allocator failure, `#0` is typically a shared sanitizer/
+# libFuzzer runtime callback (e.g. __sanitizer_print_stack_trace), identical
+# across unrelated slow paths — comparing it would accept a drifted defect. Walk
+# frames in order and take the first that names OpenJPEG/GDCM/CharLS source or the
+# harness. `|| true`: a frame-less log yields an empty signature (nothing to
+# compare), and the fallback below still runs.
+app_frame_sig() {   # $1 = sanitizer log; echoes first app-frame function or empty
+    { grep -E '#[0-9]+ 0x' "$1" || true; } | while read -r line; do
+        case "${line}" in
+            *openjp2*|*/openjpeg/*|*" opj_"*|*charls::*|*/charls/*|*libcharls*|\
+            *gdcm::*|*/gdcm/*|*libgdcm*|*LLVMFuzzerTestOneInput*|*/src/*)
+                echo "${line}" | sed -E 's/.* in ([^ ]+).*/\1/'; return 0 ;;
+        esac
+    done
+}
+# Capture the ORIGINAL replay's application-frame signature BEFORE minimizing.
+orig_top="$(app_frame_sig "${san_log}" | head -n1 || true)"
 
 echo "==> Minimizing input (crash-signature-preserving)"
 min="${crash}.min"
@@ -125,9 +137,9 @@ if [ -f "${min}" ]; then
     set +e
     "${bin}" "${lim_args[@]}" "${min}" > "${min_log}" 2>&1
     set -e
-    min_top="$( { grep -E '#0 0x' "${min_log}" || true; } | head -n1 | sed -E 's/.* in ([^ ]+).*/\1/')"
+    min_top="$(app_frame_sig "${min_log}" | head -n1 || true)"
     if [ -z "${min_top}" ] || { [ -n "${orig_top}" ] && [ "${min_top}" != "${orig_top}" ]; }; then
-        echo "==> Minimized input drifted (top frame '${min_top}' != '${orig_top}'); using ORIGINAL as reproducer." >&2
+        echo "==> Minimized input drifted (app frame '${min_top}' != '${orig_top}'); using ORIGINAL as reproducer." >&2
         min="${crash}"
     fi
 else
