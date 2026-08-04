@@ -128,6 +128,38 @@ echo "==> Linking harness_charls"
     "${CHARLS_LIB}" \
     -o "${OUT_DIR}/fuzz_charls"
 
+# ASan-ONLY CharLS variant, so the documented ASan-only deep run in RESULTS.md is
+# reproducible. The default (address,undefined) build halts on CharLS's known
+# signed-overflow UB (halt_on_error=1), which would stop workers before the
+# memory-safety hunt; this variant drops UBSan so the hunt for real corruption
+# runs to completion. run.sh / triage.sh expose it as the `charls_asan` target.
+ASAN_ONLY_LIB_FLAGS="-g -O1 -fno-omit-frame-pointer -fsanitize=fuzzer-no-link,address"
+ASAN_ONLY_BIN_FLAGS="-g -O1 -fno-omit-frame-pointer -fsanitize=fuzzer,address"
+echo "==> Building CharLS (ASan-only variant)  [reproduces RESULTS.md ASan-only run]"
+cmake -S "${SRC_DIR}/charls" -B "${BUILD_DIR}/charls_asan" -G Ninja \
+    -DCMAKE_BUILD_TYPE=Debug \
+    -DBUILD_SHARED_LIBS=OFF \
+    -DCHARLS_BUILD_TESTS=OFF \
+    -DCHARLS_BUILD_SAMPLES=OFF \
+    -DCHARLS_BUILD_FUZZ_TEST=OFF \
+    -DCMAKE_C_COMPILER="${CC}" \
+    -DCMAKE_CXX_COMPILER="${CXX}" \
+    -DCMAKE_C_FLAGS="${ASAN_ONLY_LIB_FLAGS}" \
+    -DCMAKE_CXX_FLAGS="${ASAN_ONLY_LIB_FLAGS}"
+cmake --build "${BUILD_DIR}/charls_asan" -j"$(nproc)"
+echo "==> Linking harness_charls_asan"
+"${CXX}" ${ASAN_ONLY_BIN_FLAGS} \
+    -I"${SRC_DIR}/charls/include" \
+    "${WORK_DIR}/harness_charls.cxx" \
+    "$(find "${BUILD_DIR}/charls_asan" -name 'libcharls.a' | head -n1)" \
+    -o "${OUT_DIR}/fuzz_charls_asan"
+
+# Record which sanitizer set each CharLS binary carries, for report provenance.
+{
+    echo "charls-build fuzz_charls: fuzzer,address,undefined -fno-sanitize=function"
+    echo "charls-build fuzz_charls_asan: fuzzer,address (ASan-only; reproduces RESULTS.md deep run)"
+} >> "${OUT_DIR}/versions.txt"
+
 echo "==> Seeding corpus from upstream test images (if present)"
 mkdir -p "${WORK_DIR}/corpus"
 find "${SRC_DIR}/openjpeg" -type f \( -name '*.j2k' -o -name '*.jp2' \) \

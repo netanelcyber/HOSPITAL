@@ -20,11 +20,12 @@ target="${1:-}"
 shift || true
 
 case "${target}" in
-    openjpeg) bin="${OUT_DIR}/fuzz_openjpeg" ;;
-    gdcm)     bin="${OUT_DIR}/fuzz_gdcm" ;;
-    charls)   bin="${OUT_DIR}/fuzz_charls" ;;
+    openjpeg)    bin="${OUT_DIR}/fuzz_openjpeg" ;;
+    gdcm)        bin="${OUT_DIR}/fuzz_gdcm" ;;
+    charls)      bin="${OUT_DIR}/fuzz_charls" ;;
+    charls_asan) bin="${OUT_DIR}/fuzz_charls_asan" ;;   # ASan-only (reproduces RESULTS.md deep run)
     *)
-        echo "usage: $0 {openjpeg|gdcm|charls} [libFuzzer args]" >&2
+        echo "usage: $0 {openjpeg|gdcm|charls|charls_asan} [libFuzzer args]" >&2
         exit 2
         ;;
 esac

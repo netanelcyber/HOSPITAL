@@ -8,7 +8,7 @@ you don't own.
 
 | Rank | ID | Candidate (class) | Max CVSS if confirmed | Verifiable here? | Status (2026-08-03) |
 |---|---|---|---|---|---|
-| 1 | **B04** | OpenJPEG JPEG2000 decode — memory corruption | ~9.8 (RCE) | ✅ fuzzing | **Ran — no ASan failure observed** (0 crashes across the recorded runs). A finite campaign can't prove absence of bugs; keep hunting. |
+| 1 | **B04** | OpenJPEG JPEG2000 decode — memory corruption | ~9.8 (RCE) | ✅ fuzzing | **Ran — 0 memory-corruption findings** (OOM + slow-unit artifacts were produced, but no ASan heap/UAF failure). A finite campaign can't prove absence of bugs; keep hunting. |
 | 2 | **B05** | CharLS JPEG-LS decode — memory corruption | ~9.8 (RCE) | ✅ fuzzing | **Ran deep (ASan-only).** No ASan memory-corruption observed. A signed-overflow UB in decode arithmetic remains **UNRESOLVED** (not "benign" — ASan can't see arithmetic UB) + a slow-unit/timeout (CPU-DoS). Likely known (OSS-Fuzz). |
 | 2b | **B04-via-DICOM** | GDCM JPEG2000 **codec wrapper** (encapsulated DICOM) | ~8–9 (RCE) | ✅ fuzzing | **Ran deep → FOUND a genuine ASan heap OOB-READ (CWE-125)** in GDCM's JPEG2000 header parser (`parsej2k_imp`), reproducible on v3.0.24. Severity Medium (read/info-leak, not RCE). **Novelty plausible, unconfirmed** — details+repro held PRIVATE pending dedup + coordinated disclosure (CERT/CC + CISA). |
 | 3 | **B06** | RT-STRUCT / waveform parse (GDCM/DCMTK) — memory corruption | ~8–9 | ✅ fuzzing (needs RT seeds) | Reachable via the GDCM harness with RT-STRUCT seeds; not yet seeded. Pending. |

@@ -154,7 +154,9 @@ genuinely exercised. Deep run artifacts: **only `oom`** = the already-known allo
 ### CharLS JPEG-LS (B05) — ASan-only to separate UB from corruption
 The `undefined` build kept halting on **signed-integer-overflow** in decode arithmetic
 (`default_traits.hpp:168` `dequantize`, then `run_mode_context.hpp:43`). Rebuilt **ASan-only**
-to hunt purely for memory unsafety. Result: no ASan error — only a **timeout** (a ~1 MB stream
+to hunt purely for memory unsafety. `build.sh` now produces this variant as a first-class
+binary (`fuzz_charls_asan`, target `charls_asan` in run.sh/triage.sh), so this run is
+reproducible from the standard build. Result: no ASan error — only a **timeout** (a ~1 MB stream
 that decodes very slowly in `read_unary_code`, a CPU-DoS/hang class). **No memory corruption.**
 
 ⚠️ **The signed overflow is NOT resolved — do not call it "benign".** ASan does not diagnose

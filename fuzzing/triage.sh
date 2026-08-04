@@ -21,33 +21,40 @@ if [ $# -eq 2 ]; then
     target="$1"; crash="$2"
 elif [ $# -eq 1 ]; then
     crash="$1"
-    # Infer only when EXACTLY ONE of the three harnesses is built (count them all).
+    # Infer only when EXACTLY ONE of the harnesses is built (count them all).
     present=()
-    [ -x "${OUT_DIR}/fuzz_openjpeg" ] && present+=(openjpeg)
-    [ -x "${OUT_DIR}/fuzz_gdcm" ]     && present+=(gdcm)
-    [ -x "${OUT_DIR}/fuzz_charls" ]   && present+=(charls)
+    [ -x "${OUT_DIR}/fuzz_openjpeg" ]    && present+=(openjpeg)
+    [ -x "${OUT_DIR}/fuzz_gdcm" ]        && present+=(gdcm)
+    [ -x "${OUT_DIR}/fuzz_charls" ]      && present+=(charls)
+    [ -x "${OUT_DIR}/fuzz_charls_asan" ] && present+=(charls_asan)
     if [ "${#present[@]}" -eq 1 ]; then
         target="${present[0]}"
     else
-        echo "error: ${#present[@]} harnesses present (${present[*]:-none}); specify target: $0 {openjpeg|gdcm|charls} <crash>" >&2
+        echo "error: ${#present[@]} harnesses present (${present[*]:-none}); specify target: $0 {openjpeg|gdcm|charls|charls_asan} <crash>" >&2
         exit 2
     fi
 else
-    echo "usage: $0 {openjpeg|gdcm|charls} <crash-file>" >&2
+    echo "usage: $0 {openjpeg|gdcm|charls|charls_asan} <crash-file>" >&2
     exit 2
 fi
 
 case "${target}" in
-    openjpeg) bin="${OUT_DIR}/fuzz_openjpeg" ;;
-    gdcm)     bin="${OUT_DIR}/fuzz_gdcm" ;;
-    charls)   bin="${OUT_DIR}/fuzz_charls" ;;
+    openjpeg)    bin="${OUT_DIR}/fuzz_openjpeg" ;;
+    gdcm)        bin="${OUT_DIR}/fuzz_gdcm" ;;
+    charls)      bin="${OUT_DIR}/fuzz_charls" ;;
+    charls_asan) bin="${OUT_DIR}/fuzz_charls_asan" ;;
     *) echo "error: unknown target '${target}'" >&2; exit 2 ;;
 esac
 [ -x "${bin}" ] || { echo "error: ${bin} not built" >&2; exit 1; }
 [ -f "${crash}" ] || { echo "error: no such crash file: ${crash}" >&2; exit 1; }
 
 hash="$(basename "${crash}")"
-report="${OUT_DIR}/triage-${hash}.txt"
+# Include the target in every output name: libFuzzer names artifacts by content
+# hash, so identical input bytes under two harnesses share a basename — without
+# the target prefix, triaging the second would overwrite the first's report and
+# logs and lose provenance.
+tag="${target}-${hash}"
+report="${OUT_DIR}/triage-${tag}.txt"
 mkdir -p "${OUT_DIR}"
 
 export ASAN_OPTIONS="${ASAN_OPTIONS:-abort_on_error=1:allocator_may_return_null=1:detect_leaks=0}"
@@ -65,7 +72,7 @@ lim_args=(-timeout="${TIMEOUT_SEC}" -rss_limit_mb=2048)
 [ "${MALLOC_LIMIT_MB}" != "0" ] && lim_args+=(-malloc_limit_mb="${MALLOC_LIMIT_MB}")
 
 echo "==> Reproducing under ${target} to capture sanitizer stack"
-san_log="${OUT_DIR}/san-${hash}.log"
+san_log="${OUT_DIR}/san-${tag}.log"
 # Single-shot replay of the crash input; capture the sanitizer report.
 set +e
 "${bin}" "${lim_args[@]}" "${crash}" > "${san_log}" 2>&1
@@ -81,28 +88,33 @@ if [ "${rc}" -eq 0 ] || ! grep -Eqi 'ERROR: (AddressSanitizer|libFuzzer)|runtime
     exit 3
 fi
 
+# Capture the ORIGINAL replay's top frame BEFORE minimizing, from the clean
+# replay log only. Frame lookup tolerates zero matches (a libFuzzer OOM/timeout
+# report can carry the accepted diagnostic with NO `#0 0x` app frame): under
+# `set -o pipefail` a no-match grep would fail the pipeline and abort triage, so
+# guard with `|| true` — an empty orig_top just means "no frame to compare".
+orig_top="$( { grep -E '#0 0x' "${san_log}" || true; } | head -n1 | sed -E 's/.* in ([^ ]+).*/\1/')"
+
 echo "==> Minimizing input (crash-signature-preserving)"
 min="${crash}.min"
 # dedup_token_length=3 makes -minimize_crash keep the SAME crash signature rather
 # than drifting to a different defect an input might also trigger (observed in
 # practice — a drifted 132B min reproduced a different crash than the 784B input).
+# Minimizer diagnostics go to a SEPARATE log — never appended to san_log — so the
+# component/CWE classifiers below grep only the initial replay, not the rejected
+# candidate reductions the minimizer prints while searching.
+min_search_log="${OUT_DIR}/minimize-${tag}.log"
 set +e
 ASAN_OPTIONS="${ASAN_OPTIONS}:dedup_token_length=3" \
 "${bin}" -minimize_crash=1 -runs=20000 "${lim_args[@]}" \
-    -exact_artifact_path="${min}" "${crash}" >> "${san_log}" 2>&1
+    -exact_artifact_path="${min}" "${crash}" > "${min_search_log}" 2>&1
 set -e
 
 # Re-validate: the minimized file must still reproduce the SAME owning frame as
 # the original replay. If it drifted (or produced nothing), fall back to the
 # original input so the report never pairs one defect's CWE with another's repro.
-# Frame lookup must tolerate zero matches: a libFuzzer OOM/timeout report can
-# carry the accepted diagnostic with NO `#0 0x` app frame. Under `set -o pipefail`
-# a no-match grep would fail the whole pipeline and abort triage here, so guard
-# with `|| true`; an empty orig_top then simply means "no frame to compare" and
-# the fallback below still runs.
-orig_top="$( { grep -E '#0 0x' "${san_log}" || true; } | head -n1 | sed -E 's/.* in ([^ ]+).*/\1/')"
 if [ -f "${min}" ]; then
-    min_log="${OUT_DIR}/san-${hash}.min.log"
+    min_log="${OUT_DIR}/san-${tag}.min.log"
     set +e
     "${bin}" "${lim_args[@]}" "${min}" > "${min_log}" 2>&1
     set -e
