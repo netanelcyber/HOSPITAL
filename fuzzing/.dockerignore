@@ -7,6 +7,7 @@ persist/
 crashes/
 crashes_*/
 corpus_*/
+results/
 out/
 build/
 artifacts/

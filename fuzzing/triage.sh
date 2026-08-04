@@ -6,15 +6,23 @@
 #   3) classify the owning component (OpenJPEG vs GDCM wrapper)
 #   4) emit a triage stub to seed the disclosure report
 #
-#   ./triage.sh {openjpeg|gdcm} crashes/crash-<hash>
-#   ./triage.sh crashes/crash-<hash>          # target inferred if only one bin exists
+#   ./triage.sh {openjpeg|gdcm|charls|charls_asan} crashes_<target>/crash-<hash>
+#   ./triage.sh crashes_<target>/crash-<hash>   # target inferred if only one bin exists
 #
-# Output: out/triage-<hash>.txt  (+ a minimized input alongside the original)
+# Output: results/triage-<target>-<hash>.txt (+ sanitizer/minimizer logs there),
+#         and a minimized input alongside the original crash file. Mount
+#         /work/results to keep these after a --rm container exits.
 #
 set -euo pipefail
 
 WORK_DIR="${WORK_DIR:-/work}"
 OUT_DIR="${WORK_DIR}/out"
+# Triage report + logs go to a SEPARATE, mountable results dir — NOT out/ (which
+# holds the built binaries and must not be masked by a bind mount). With the
+# documented `--rm` workflow, mount this dir to keep the disclosure report and
+# sanitizer/minimizer logs after the container exits. Override with RESULTS_DIR.
+RESULTS_DIR="${RESULTS_DIR:-${WORK_DIR}/results}"
+mkdir -p "${RESULTS_DIR}"
 
 # --- resolve args ------------------------------------------------------------
 if [ $# -eq 2 ]; then
@@ -54,8 +62,7 @@ hash="$(basename "${crash}")"
 # the target prefix, triaging the second would overwrite the first's report and
 # logs and lose provenance.
 tag="${target}-${hash}"
-report="${OUT_DIR}/triage-${tag}.txt"
-mkdir -p "${OUT_DIR}"
+report="${RESULTS_DIR}/triage-${tag}.txt"
 
 export ASAN_OPTIONS="${ASAN_OPTIONS:-abort_on_error=1:allocator_may_return_null=1:detect_leaks=0}"
 export UBSAN_OPTIONS="${UBSAN_OPTIONS:-print_stacktrace=1:halt_on_error=1}"
@@ -72,7 +79,7 @@ lim_args=(-timeout="${TIMEOUT_SEC}" -rss_limit_mb=2048)
 [ "${MALLOC_LIMIT_MB}" != "0" ] && lim_args+=(-malloc_limit_mb="${MALLOC_LIMIT_MB}")
 
 echo "==> Reproducing under ${target} to capture sanitizer stack"
-san_log="${OUT_DIR}/san-${tag}.log"
+san_log="${RESULTS_DIR}/san-${tag}.log"
 # Single-shot replay of the crash input; capture the sanitizer report.
 set +e
 "${bin}" "${lim_args[@]}" "${crash}" > "${san_log}" 2>&1
@@ -103,7 +110,7 @@ min="${crash}.min"
 # Minimizer diagnostics go to a SEPARATE log — never appended to san_log — so the
 # component/CWE classifiers below grep only the initial replay, not the rejected
 # candidate reductions the minimizer prints while searching.
-min_search_log="${OUT_DIR}/minimize-${tag}.log"
+min_search_log="${RESULTS_DIR}/minimize-${tag}.log"
 set +e
 ASAN_OPTIONS="${ASAN_OPTIONS}:dedup_token_length=3" \
 "${bin}" -minimize_crash=1 -runs=20000 "${lim_args[@]}" \
@@ -114,7 +121,7 @@ set -e
 # the original replay. If it drifted (or produced nothing), fall back to the
 # original input so the report never pairs one defect's CWE with another's repro.
 if [ -f "${min}" ]; then
-    min_log="${OUT_DIR}/san-${tag}.min.log"
+    min_log="${RESULTS_DIR}/san-${tag}.min.log"
     set +e
     "${bin}" "${lim_args[@]}" "${min}" > "${min_log}" 2>&1
     set -e

@@ -5,19 +5,38 @@ well-formed JPEG2000 so the fuzzer reaches deep decoder code quickly.
 
 **These are valid images, not exploits.** Do not place crash reproducers here.
 
-## What to put here (populated at build time / manually)
+## ⚠️ The default Docker build ships NO seeds here
 
-- `*.j2k`, `*.jp2` — raw JPEG2000 codestreams. Good sources:
-  - OpenJPEG's own `tests/` sample images (present in the cloned source at `/src/openjpeg`).
-  - Self-generated: `opj_compress -i some.png -o seed.j2k`.
-- `*.dcm` — JPEG2000-**encapsulated** DICOM (for the GDCM harness), e.g.
-  GDCM test data, or `gdcmconv --j2k in.dcm seed_j2k.dcm`.
+The `Dockerfile` clones OpenJPEG/GDCM/CharLS with `--depth 1` and **without their
+test-data submodules**, so their sample images are **not** present in `/src/*`.
+`build.sh`'s `find ... -exec cp` therefore usually copies **nothing**, and a first
+run is effectively **seedless** (see `../README.md` → "Seeds matter more than
+anything" and `../RESULTS.md`). You must populate seeds yourself before a real hunt.
+
+## How to actually get seeds
+
+- **Recursive submodules** (gets the upstream conformance/test data):
+  ```bash
+  git clone --recurse-submodules https://github.com/uclouvain/openjpeg.git
+  git clone --recurse-submodules https://github.com/malaterre/GDCM.git   # gdcmData
+  git clone --recurse-submodules https://github.com/team-charls/charls.git
+  # copy their *.j2k / *.jp2 / *.dcm / *.jls into this dir
+  ```
+- **Generate** (build the tools separately — they are NOT in the fuzz image, which
+  sets `BUILD_CODEC=OFF` / `GDCM_BUILD_APPLICATIONS=OFF`):
+  ```bash
+  opj_compress -i some.pnm -o seed.j2k
+  gdcmconv --j2k in.dcm seed_j2k.dcm     # J2K-encapsulated DICOM for the GDCM harness
+  ```
+
+**These are valid images, not exploits.** Do not place crash reproducers here.
 
 ## Provenance
 
 Record where each non-generated seed came from (project + license) so the corpus is
-reproducible and redistributable. Seeds pulled from OpenJPEG/GDCM test trees carry those
-projects' licenses.
+reproducible and redistributable. Seeds pulled from OpenJPEG/GDCM/CharLS test trees
+carry those projects' licenses.
 
-`build.sh` auto-populates this directory from the cloned OpenJPEG/GDCM test images if it finds
-them; otherwise drop a few `.j2k`/`.dcm` files here by hand before running.
+`build.sh` *attempts* to copy any `*.j2k`/`*.jp2`/`*.dcm`/`*.jls` it finds under
+`/src/*`, but with shallow clones there usually are none — treat auto-population as
+best-effort, not guaranteed.

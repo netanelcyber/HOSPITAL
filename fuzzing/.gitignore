@@ -3,6 +3,8 @@
 # disclosure to the right coordinator, never into git.
 build/
 out/
+results/
+**/results/
 artifacts/
 *.o
 *.a

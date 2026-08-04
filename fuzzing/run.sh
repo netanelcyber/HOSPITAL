@@ -53,9 +53,16 @@ if [ -d "${SEED_DIR}" ]; then
     cp -an "${SEED_DIR}/." "${CORPUS_DIR}/" 2>/dev/null || true
 fi
 
-# Readable sanitizer stacks; keep going past a single fuzzer-managed timeout.
+# Readable sanitizer stacks.
 export ASAN_OPTIONS="${ASAN_OPTIONS:-abort_on_error=1:allocator_may_return_null=1:detect_leaks=0}"
 export UBSAN_OPTIONS="${UBSAN_OPTIONS:-print_stacktrace=1:halt_on_error=1}"
+
+# NOTE on timeouts: -timeout=25 below means a unit running >25 s ABORTS the whole
+# process (writes a slow-unit/timeout artifact) — in single-process mode it does
+# NOT "keep going" past it. The recorded OpenJPEG/CharLS runs did hit slow units,
+# so a real campaign must either pass -jobs=N (libFuzzer starts a fresh worker
+# after each abort; note -ignore_timeouts applies only in fork mode) or guard the
+# known slow path in the harness. One slow input otherwise ends the default hunt.
 
 # Single-allocation ceiling. IMPORTANT: -malloc_limit_mb does NOT skip an input
 # and continue — per libFuzzer, "the fuzzer will exit if the target tries to

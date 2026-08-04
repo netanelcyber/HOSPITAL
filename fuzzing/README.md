@@ -35,16 +35,18 @@ docker build -t biofuzz fuzzing/
 # those seeds into the per-target /work/corpus_<target> on first run, so mounting
 # an empty host corpus_<target> is safe (it gets re-seeded, not masked). Each
 # target keeps its OWN corpus + crashes so growth never cross-pollinates.
-mkdir -p fuzzing/persist/corpus_openjpeg fuzzing/persist/crashes_openjpeg
+mkdir -p fuzzing/persist/corpus_openjpeg fuzzing/persist/crashes_openjpeg fuzzing/persist/results
 docker run --rm -it \
     -v "$PWD/fuzzing/persist/corpus_openjpeg:/work/corpus_openjpeg" \
     -v "$PWD/fuzzing/persist/crashes_openjpeg:/work/crashes_openjpeg" \
+    -v "$PWD/fuzzing/persist/results:/work/results" \
     biofuzz
 
-# inside the container (all three binaries exist, so name the target explicitly):
-./run.sh openjpeg      # or: ./run.sh gdcm | ./run.sh charls
+# inside the container (binaries exist, so name the target explicitly):
+./run.sh openjpeg      # or: gdcm | charls | charls_asan (ASan-only CharLS)
 # ... let it run; crashes land in ./crashes_openjpeg/ ...
 ./triage.sh openjpeg crashes_openjpeg/crash-<hash>   # target is REQUIRED here
+# triage report + logs land in ./results/ (mounted above, so they survive --rm)
 cat out/versions.txt   # pinned SHAs for the disclosure "version tested" field
 ```
 > For GDCM/CharLS, mount their own `corpus_<target>` + `crashes_<target>` pairs
