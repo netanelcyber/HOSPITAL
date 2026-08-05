@@ -14,23 +14,70 @@ class LabFeatureExtractor:
 
     # Reference ranges for lab tests (normal values)
     REFERENCE_RANGES = {
+        # Core metabolic panel
         "glucose": (70, 100),  # mg/dL fasting
-        "hemoglobin": (12.0, 17.5),  # g/dL
-        "potassium": (3.5, 5.0),  # mmol/L
         "sodium": (135, 145),  # mmol/L
-        "creatinine": (0.7, 1.3),  # mg/dL
+        "potassium": (3.5, 5.0),  # mmol/L
+        "chloride": (98, 107),  # mmol/L
+        "bicarbonate": (23, 29),  # mmol/L
         "blood_urea_nitrogen": (7, 20),  # mg/dL
+        "creatinine": (0.7, 1.3),  # mg/dL
+        "calcium": (8.5, 10.2),  # mg/dL
+        "magnesium": (1.7, 2.2),  # mg/dL
+        "phosphate": (2.5, 4.5),  # mg/dL
+
+        # Liver function
         "alanine_aminotransferase": (7, 56),  # U/L
         "aspartate_aminotransferase": (10, 40),  # U/L
         "alkaline_phosphatase": (44, 147),  # U/L
         "bilirubin": (0.1, 1.2),  # mg/dL
         "albumin": (3.5, 5.0),  # g/dL
+        "total_protein": (6.0, 8.3),  # g/dL
+
+        # Coagulation
         "prothrombin_time": (11, 13.5),  # seconds
         "partial_thromboplastin_time": (25, 35),  # seconds
+        "inr": (0.8, 1.1),  # ratio
+
+        # Hematology
         "platelet_count": (150, 400),  # K/uL
         "white_blood_cell_count": (4.5, 11.0),  # K/uL
-        "red_blood_cell_count": (4.5, 5.9),  # M/uL (male), (4.1, 5.1) female
-        "hematocrit": (41, 53),  # % (male), (36, 46) female
+        "red_blood_cell_count": (4.5, 5.9),  # M/uL
+        "hemoglobin": (12.0, 17.5),  # g/dL
+        "hematocrit": (41, 53),  # %
+        "mean_corpuscular_volume": (80, 100),  # fL
+
+        # Cardiac markers
+        "troponin_i": (0.0, 0.04),  # ng/mL
+        "troponin_t": (0.0, 0.04),  # ng/mL
+        "bnp": (0, 100),  # pg/mL (BNP)
+        "nt_probnp": (0, 125),  # pg/mL (NT-proBNP)
+
+        # Hemolysis & muscle injury
+        "lactate_dehydrogenase": (140, 280),  # U/L
+        "creatine_kinase": (30, 200),  # U/L
+        "myoglobin": (0, 100),  # ng/mL
+
+        # Pancreatic
+        "amylase": (30, 110),  # U/L
+        "lipase": (0, 60),  # U/L
+
+        # Inflammatory markers
+        "c_reactive_protein": (0, 10),  # mg/L
+        "procalcitonin": (0, 0.5),  # ng/mL
+
+        # Coagulation & thrombosis
+        "d_dimer": (0, 0.5),  # μg/mL
+        "fibrinogen": (200, 400),  # mg/dL
+
+        # Thyroid
+        "tsh": (0.4, 4.0),  # mIU/L
+        "free_t4": (0.8, 1.8),  # ng/dL
+
+        # Acids & gases (surrogate from metabolic panel)
+        "ph": (7.35, 7.45),  # pH units
+        "pco2": (35, 45),  # mmHg
+        "po2": (80, 100),  # mmHg
     }
 
     def __init__(

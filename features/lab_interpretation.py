@@ -254,6 +254,262 @@ PATTERN_RULES: tuple[PatternRule, ...] = (
         supporting=("albumin",),
         matches=lambda f: _abnormal(f, "albumin", "low"),
     ),
+    # Cardiac conditions
+    PatternRule(
+        condition="Acute coronary syndrome / myocardial infarction",
+        wikipedia_title="Acute coronary syndrome",
+        rationale="Elevated troponin (myocardial necrosis marker) indicates acute "
+                  "myocardial injury and warrants ECG correlation and urgent evaluation.",
+        priority="urgent",
+        supporting=("troponin_i", "troponin_t"),
+        matches=lambda f: _abnormal(f, "troponin_i", "high") or _abnormal(f, "troponin_t", "high"),
+    ),
+    PatternRule(
+        condition="Acute heart failure",
+        wikipedia_title="Heart failure",
+        rationale="Markedly elevated BNP or NT-proBNP indicates ventricular stress "
+                  "from volume overload or reduced ejection fraction.",
+        priority="important",
+        supporting=("bnp", "nt_probnp"),
+        matches=lambda f: _at_least(f, "bnp", "high", ("marked", "critical"))
+                          or _at_least(f, "nt_probnp", "high", ("marked", "critical")),
+    ),
+    PatternRule(
+        condition="Myocarditis / pericarditis",
+        wikipedia_title="Myocarditis",
+        rationale="Troponin elevation with marked leukocytosis suggests myocardial "
+                  "inflammation rather than coronary occlusion alone.",
+        priority="urgent",
+        supporting=("troponin_i", "troponin_t", "white_blood_cell_count"),
+        matches=lambda f: ((_abnormal(f, "troponin_i", "high") or _abnormal(f, "troponin_t", "high"))
+                           and _at_least(f, "white_blood_cell_count", "high", ("marked", "critical"))),
+    ),
+    PatternRule(
+        condition="Arrhythmia risk (electrolyte derangement)",
+        wikipedia_title="Cardiac arrhythmia",
+        rationale="Combined abnormalities in potassium and/or magnesium with "
+                  "calcium imbalance create substrate for dangerous arrhythmias.",
+        priority="urgent",
+        supporting=("potassium", "magnesium", "calcium"),
+        matches=lambda f: (((_abnormal(f, "potassium", "high") or _abnormal(f, "potassium", "low"))
+                            and (_abnormal(f, "magnesium", "low") or _abnormal(f, "calcium", "low")))
+                           or (_at_least(f, "potassium", "high", ("marked", "critical"))
+                               or _at_least(f, "potassium", "low", ("marked", "critical")))),
+    ),
+    # Pulmonary / respiratory
+    PatternRule(
+        condition="Respiratory failure / acute respiratory distress",
+        wikipedia_title="Acute respiratory distress syndrome",
+        rationale="Elevated lactate with leukocytosis and evidence of renal stress "
+                  "suggests severe systemic inflammatory response affecting the lungs.",
+        priority="urgent",
+        supporting=("lactate", "white_blood_cell_count", "creatinine"),
+        matches=lambda f: _at_least(f, "lactate", "high", ("marked", "critical"))
+                          and _at_least(f, "white_blood_cell_count", "high", ("mild", "marked", "critical")),
+    ),
+    PatternRule(
+        condition="Pulmonary embolism (suspected)",
+        wikipedia_title="Pulmonary embolism",
+        rationale="D-dimer elevation (thrombosis marker) with hypoxia surrogates "
+                  "(elevated lactate) warrants imaging correlation.",
+        priority="urgent",
+        supporting=("d_dimer", "lactate"),
+        matches=lambda f: _abnormal(f, "d_dimer", "high") and _abnormal(f, "lactate", "high"),
+    ),
+    PatternRule(
+        condition="Pneumonia / lower respiratory infection",
+        wikipedia_title="Pneumonia",
+        rationale="Marked leukocytosis (often with left shift if available) "
+                  "with elevated inflammatory markers.",
+        priority="important",
+        supporting=("white_blood_cell_count", "c_reactive_protein", "procalcitonin"),
+        matches=lambda f: _at_least(f, "white_blood_cell_count", "high", ("marked", "critical"))
+                          and (_abnormal(f, "c_reactive_protein", "high") or _abnormal(f, "procalcitonin", "high")),
+    ),
+    # Hematologic / hemolysis
+    PatternRule(
+        condition="Hemolysis",
+        wikipedia_title="Hemolysis",
+        rationale="Elevated LD/LDH with unconjugated hyperbilirubinemia and "
+                  "hemoglobin drop indicates red cell destruction.",
+        priority="important",
+        supporting=("lactate_dehydrogenase", "bilirubin", "hemoglobin"),
+        matches=lambda f: _abnormal(f, "lactate_dehydrogenase", "high")
+                          and _abnormal(f, "bilirubin", "high") and _abnormal(f, "hemoglobin", "low"),
+    ),
+    PatternRule(
+        condition="Thrombotic thrombocytopenic purpura (TTP)",
+        wikipedia_title="Thrombotic thrombocytopenic purpura",
+        rationale="Severe thrombocytopenia (often <20K) with hemolysis markers "
+                  "and renal dysfunction suggests microangiopathic hemolytic anemia.",
+        priority="urgent",
+        supporting=("platelet_count", "lactate_dehydrogenase", "creatinine"),
+        matches=lambda f: _at_least(f, "platelet_count", "low", ("marked", "critical"))
+                          and _abnormal(f, "lactate_dehydrogenase", "high") and _abnormal(f, "creatinine", "high"),
+    ),
+    PatternRule(
+        condition="Vitamin K deficiency",
+        wikipedia_title="Vitamin K deficiency",
+        rationale="Isolated prolongation of prothrombin time (PT/INR) without "
+                  "thrombocytopenia suggests factor II, VII, or X deficiency.",
+        priority="important",
+        supporting=("prothrombin_time", "inr"),
+        matches=lambda f: (_abnormal(f, "prothrombin_time", "high") or _abnormal(f, "inr", "high"))
+                          and not _abnormal(f, "platelet_count", "low"),
+    ),
+    # Metabolic / endocrine
+    PatternRule(
+        condition="Diabetic ketoacidosis / metabolic acidosis",
+        wikipedia_title="Diabetic ketoacidosis",
+        rationale="Extreme hyperglycemia with evidence of acid-base derangement "
+                  "(low bicarbonate) and electrolyte shift.",
+        priority="urgent",
+        supporting=("glucose", "bicarbonate", "potassium"),
+        matches=lambda f: _at_least(f, "glucose", "high", ("marked", "critical"))
+                          and _at_least(f, "bicarbonate", "low", ("marked", "critical")),
+    ),
+    PatternRule(
+        condition="Hyperosmolar hyperglycemic state",
+        wikipedia_title="Hyperosmolar hyperglycemic state",
+        rationale="Extreme hyperglycemia with markedly elevated sodium "
+                  "(osmolality surrogate) but less acidemia than DKA.",
+        priority="urgent",
+        supporting=("glucose", "sodium"),
+        matches=lambda f: _at_least(f, "glucose", "high", ("marked", "critical"))
+                          and _at_least(f, "sodium", "high", ("marked", "critical")),
+    ),
+    PatternRule(
+        condition="Addisonian crisis",
+        wikipedia_title="Addisonian crisis",
+        rationale="Combined hyponatremia and hyperkalemia (rare together) "
+                  "suggests adrenal insufficiency.",
+        priority="urgent",
+        supporting=("sodium", "potassium"),
+        matches=lambda f: _at_least(f, "sodium", "low", ("marked", "critical"))
+                          and _at_least(f, "potassium", "high", ("marked", "critical")),
+    ),
+    PatternRule(
+        condition="Thyroid storm (suspected)",
+        wikipedia_title="Thyroid storm",
+        rationale="Marked elevation in glucose with tachycardia indicators "
+                  "(elevated lactate) and low TSH (if available).",
+        priority="urgent",
+        supporting=("glucose", "tsh", "lactate"),
+        matches=lambda f: _at_least(f, "glucose", "high", ("marked", "critical"))
+                          and _abnormal(f, "tsh", "low"),
+    ),
+    # Renal / rhabdomyolysis
+    PatternRule(
+        condition="Rhabdomyolysis",
+        wikipedia_title="Rhabdomyolysis",
+        rationale="Acute creatinine spike with markedly elevated CK and myoglobin, "
+                  "often with hyperkalemia and hypocalcemia.",
+        priority="urgent",
+        supporting=("creatinine", "creatine_kinase", "myoglobin", "potassium", "calcium"),
+        matches=lambda f: _at_least(f, "creatinine", "high", ("marked", "critical"))
+                          and (_at_least(f, "creatine_kinase", "high", ("marked", "critical"))
+                               or _abnormal(f, "myoglobin", "high")),
+    ),
+    PatternRule(
+        condition="Chronic kidney disease (advanced)",
+        wikipedia_title="Chronic kidney disease",
+        rationale="Baseline creatinine elevation with anemia and phosphate "
+                  "abnormality suggests longstanding renal disease.",
+        priority="routine",
+        supporting=("creatinine", "hemoglobin", "phosphate"),
+        matches=lambda f: _abnormal(f, "creatinine", "high")
+                          and _abnormal(f, "hemoglobin", "low") and _abnormal(f, "phosphate", "high"),
+    ),
+    PatternRule(
+        condition="Glomerulonephritis",
+        wikipedia_title="Glomerulonephritis",
+        rationale="Rising creatinine with hematuria (RBC abnormality, if available) "
+                  "and proteinuria (albumin loss) suggests glomerular disease.",
+        priority="important",
+        supporting=("creatinine", "albumin", "red_blood_cell_count"),
+        matches=lambda f: _at_least(f, "creatinine", "high", ("marked", "critical"))
+                          and _abnormal(f, "albumin", "low"),
+    ),
+    # Gastrointestinal / pancreatic
+    PatternRule(
+        condition="Acute liver injury",
+        wikipedia_title="Acute liver failure",
+        rationale="Marked and rapid elevation of transaminases (AST/ALT) "
+                  "with rising bilirubin suggests acute hepatocellular damage.",
+        priority="important",
+        supporting=("aspartate_aminotransferase", "alanine_aminotransferase", "bilirubin"),
+        matches=lambda f: _at_least(f, "aspartate_aminotransferase", "high", ("marked", "critical"))
+                          and _at_least(f, "alanine_aminotransferase", "high", ("marked", "critical")),
+    ),
+    PatternRule(
+        condition="Acute pancreatitis",
+        wikipedia_title="Acute pancreatitis",
+        rationale="Marked elevation of amylase and/or lipase (pancreatic enzymes) "
+                  "often with hypocalcemia and elevated glucose.",
+        priority="important",
+        supporting=("amylase", "lipase", "calcium", "glucose"),
+        matches=lambda f: (_at_least(f, "amylase", "high", ("marked", "critical"))
+                           or _at_least(f, "lipase", "high", ("marked", "critical"))),
+    ),
+    PatternRule(
+        condition="Peritonitis / acute abdomen",
+        wikipedia_title="Peritonitis",
+        rationale="Marked leukocytosis often with left shift, accompanied by "
+                  "metabolic acidosis suggests acute intra-abdominal infection.",
+        priority="important",
+        supporting=("white_blood_cell_count", "bicarbonate"),
+        matches=lambda f: _at_least(f, "white_blood_cell_count", "high", ("marked", "critical"))
+                          and _at_least(f, "bicarbonate", "low", ("mild", "marked")),
+    ),
+    # Sepsis / infection (enhanced)
+    PatternRule(
+        condition="Sepsis / systemic inflammatory response",
+        wikipedia_title="Sepsis",
+        rationale="Elevated lactate (tissue hypoperfusion) with leukocytosis and "
+                  "evidence of coagulopathy or organ stress.",
+        priority="urgent",
+        supporting=("lactate", "white_blood_cell_count", "procalcitonin"),
+        matches=lambda f: _abnormal(f, "lactate", "high")
+                          and _at_least(f, "white_blood_cell_count", "high", ("mild", "marked", "critical")),
+    ),
+    PatternRule(
+        condition="Septic shock",
+        wikipedia_title="Septic shock",
+        rationale="Severe elevation of lactate (>4) with acute kidney dysfunction "
+                  "indicates end-organ hypoperfusion from sepsis.",
+        priority="urgent",
+        supporting=("lactate", "creatinine"),
+        matches=lambda f: _at_least(f, "lactate", "high", ("marked", "critical"))
+                          and _at_least(f, "creatinine", "high", ("marked", "critical")),
+    ),
+    PatternRule(
+        condition="Coagulopathy / disseminated thrombosis",
+        wikipedia_title="Coagulopathy",
+        rationale="Prolonged PT/PTT with thrombocytopenia and elevated D-dimer "
+                  "indicates active consumption of clotting factors.",
+        priority="urgent",
+        supporting=("prothrombin_time", "partial_thromboplastin_time", "d_dimer", "platelet_count"),
+        matches=lambda f: ((_abnormal(f, "prothrombin_time", "high") or _abnormal(f, "partial_thromboplastin_time", "high"))
+                           and _abnormal(f, "d_dimer", "high")),
+    ),
+    PatternRule(
+        condition="Metabolic alkalosis",
+        wikipedia_title="Alkalosis",
+        rationale="Elevated bicarbonate (>29), often with hypokalemia and hypochloremia "
+                  "from diuretics or GI losses.",
+        priority="routine",
+        supporting=("bicarbonate", "potassium", "chloride"),
+        matches=lambda f: _at_least(f, "bicarbonate", "high", ("marked", "critical")),
+    ),
+    PatternRule(
+        condition="Respiratory alkalosis",
+        wikipedia_title="Alkalosis",
+        rationale="Low CO2 from hyperventilation (anxiety, PE, pregnancy, fever), "
+                  "offsetting metabolic acidosis.",
+        priority="routine",
+        supporting=("pco2", "bicarbonate"),
+        matches=lambda f: _abnormal(f, "pco2", "low") and not _at_least(f, "bicarbonate", "low", ("marked", "critical")),
+    ),
 )
 
 PRIORITY_ORDER = {"urgent": 0, "important": 1, "routine": 2}
