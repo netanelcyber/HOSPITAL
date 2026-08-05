@@ -75,7 +75,10 @@ export UBSAN_OPTIONS="${UBSAN_OPTIONS:-print_stacktrace=1:halt_on_error=1}"
 # via TIMEOUT_SEC / MALLOC_LIMIT_MB if your campaign used other values.
 TIMEOUT_SEC="${TIMEOUT_SEC:-25}"
 MALLOC_LIMIT_MB="${MALLOC_LIMIT_MB:-512}"
-lim_args=(-timeout="${TIMEOUT_SEC}" -rss_limit_mb=2048)
+RSS_LIMIT_MB="${RSS_LIMIT_MB:-2048}"   # match the campaign's -rss_limit_mb; a
+# mismatch can make an OOM artifact exit normally (reject a valid artifact) or
+# fail earlier at an unrelated allocation (misclassify) — pass the campaign value.
+lim_args=(-timeout="${TIMEOUT_SEC}" -rss_limit_mb="${RSS_LIMIT_MB}")
 [ "${MALLOC_LIMIT_MB}" != "0" ] && lim_args+=(-malloc_limit_mb="${MALLOC_LIMIT_MB}")
 
 echo "==> Reproducing under ${target} to capture sanitizer stack"

@@ -11,7 +11,7 @@ you don't own.
 | 1 | **B04** | OpenJPEG JPEG2000 decode — memory corruption | ~9.8 (RCE) | ✅ fuzzing | **Ran — 0 memory-corruption findings** (OOM + slow-unit artifacts were produced, but no ASan heap/UAF failure). A finite campaign can't prove absence of bugs; keep hunting. |
 | 2 | **B05** | CharLS JPEG-LS decode — memory corruption | ~9.8 (RCE) | ✅ fuzzing | **Ran deep (ASan-only).** No ASan memory-corruption observed. A signed-overflow UB in decode arithmetic remains **UNRESOLVED** (not "benign" — ASan can't see arithmetic UB) + a slow-unit/timeout (CPU-DoS). Likely known (OSS-Fuzz). |
 | 2b | **B04-via-DICOM** | GDCM JPEG2000 **codec wrapper** (encapsulated DICOM) | ~8–9 (RCE) | ✅ fuzzing | **Ran deep → FOUND a genuine ASan heap OOB-READ (CWE-125)** in GDCM's JPEG2000 header parser (`parsej2k_imp`), reproducible on v3.0.24. Severity Medium (read/info-leak, not RCE). **Novelty plausible, unconfirmed** — details+repro held PRIVATE pending dedup + coordinated disclosure (CERT/CC + CISA). |
-| 3 | **B06** | RT-STRUCT / waveform parse (GDCM/DCMTK) — memory corruption | ~8–9 | ✅ fuzzing (needs RT seeds) | Reachable via the GDCM harness with RT-STRUCT seeds; not yet seeded. Pending. |
+| 3 | **B06** | RT-STRUCT / RT-DOSE / waveform parse (GDCM/DCMTK) — memory corruption | ~8–9 | ⚠️ needs a sequence-aware harness | **NOT reachable** by the current `harness_gdcm.cxx` (`ImageReader`→`GetBuffer`, Pixel Data): RT-STRUCT contour data lives in nested dataset **sequences**, not Pixel Data. Needs a `gdcm::Reader`/`DataSet`-traversal harness; RT-DOSE/waveform are separate paths. Pending. |
 | 4 | **B07** | Encapsulated-PDF-in-DICOM parse — memory corruption | ~7–8 | ⚠️ needs a DIFFERENT harness | **NOT covered by `harness_gdcm.cxx`** — it uses `ImageReader`/`GetBuffer` (Pixel Data path), while an encapsulated PDF is stored as an *encapsulated document*, not Pixel Data, and no PDF parser is invoked. Needs a viewer or a dedicated embedded-document harness. Pending. |
 | 5 | **B04/GDCM** | GDCM allocation-DoS (parser front-end) | 7.5 (DoS) | ✅ fuzzing | **Ran. Found** 163 B → 4.29 GB (`ByteValue::SetLength`). **KNOWN = CVE-2026-3650.** Duplicate, not reported. |
 > **Reading the `Rank` column:** ranks 1–5 are the locally-fuzzable memory-corruption class, ordered by CVSS. The rows below with `—` are **not lower severity** — several are higher — they are only **not verifiable in this local fuzzing environment** (they need a running app/network). By pure CVSS-priority the order would be: **C11 OpenMRS SSTI (9.x) and D12 Mirth (9.x) FIRST**, then B04/B05 (9.8), then the rest. They sit below only because feasibility ≠ severity; when an environment is available, tackle the 9.x app candidates before the medium-severity fuzz leftovers.
@@ -58,11 +58,16 @@ pointed at third-party systems. For those, the right artifacts are already in `.
 
 1. **B04/B05 done right** — real J2K/JLS seed corpora + hours of fuzzing (biggest lever for the
    top-CVSS RCE class). Add `-jobs/-workers`, reuse grown corpus.
-2. **B06** — add RT-STRUCT seeds; reachable via the existing GDCM `ImageReader` harness.
-   **B07 (encapsulated PDF)** — seeds alone do NOT reach it: the current `harness_gdcm.cxx`
-   only drives `ImageReader`/`GetBuffer` (Pixel Data) and never invokes a PDF/encapsulated-
-   document parser. Write a **dedicated embedded-document harness** (or drive a viewer) FIRST,
-   then seed it — otherwise the campaign spends time without testing B07.
+2. **B06 (RT-STRUCT/RT-DOSE/waveform)** — the existing `harness_gdcm.cxx` (`ImageReader` →
+   `GetBuffer`, Pixel Data) does **not** reach these: RT-STRUCT stores contour data in nested
+   dataset **sequences**, not Pixel Data, so such inputs are rejected as non-images and the
+   contour structures are never traversed. Needs a **generic dataset/sequence reader** (e.g.
+   `gdcm::Reader`/`DataSet` traversal) or a dedicated RT harness; treat RT-DOSE and waveform as
+   **separate** paths.
+   **B07 (encapsulated PDF)** — likewise not reachable by the current harness: it never invokes
+   a PDF/encapsulated-document parser. Write a **dedicated embedded-document harness** (or drive
+   a viewer) FIRST, then seed it. For both B06 and B07, seeds without the right harness spend
+   fuzzing time testing nothing.
 3. Triage the **CharLS overflow** against CharLS's issue tracker / OSS-Fuzz before any contact —
    if it's genuinely new *and* shown to reach memory, only then it climbs the queue.
 4. For ranks below the line, verify on **owned** app/network instances using the docs above.

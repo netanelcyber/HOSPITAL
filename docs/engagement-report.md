@@ -45,7 +45,7 @@ Fuzzing של נתיב ה-JPEG2000 של **GDCM** (דרך seeds של J2K-encapsula
 
 ### 4.2 תוצאות שליליות (חשובות באותה מידה)
 - **OpenJPEG** — **לא נצפתה** memory-corruption בריצה שתועדה (corpus מגוון, value-profile). ריצת fuzzing סופית אינה מוכיחה היעדר חולשות — רק שבכיסוי שהושג לא צפה כשל ASan.
-- **CharLS** — אין memory-corruption; **signed-overflow (CWE-190) שנותר פתוח** (לא "שפיר" — ASan לא מאבחן UB אריתמטי) + slow-unit (CPU-DoS).
+- **CharLS** — **לא נצפתה** memory-corruption בריצת ה-ASan-only שתועדה (כמו OpenJPEG — ריצה סופית אינה מוכיחה היעדר); בנוסף **signed-overflow (CWE-190) שנותר פתוח** (לא "שפיר" — ASan לא מאבחן UB אריתמטי) + slow-unit (CPU-DoS).
 
 ### 4.3 rediscovery של באג ידוע
 - **GDCM allocation-DoS** (163B → 4.29GB) — תואם **CVE-2026-3650**, duplicate, לא דווח.
